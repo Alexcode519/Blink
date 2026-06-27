@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, Alert, Platform, Image, Modal, Pressable, NativeModules,
+  StyleSheet, Alert, Platform, Image, Modal, Pressable, PermissionsAndroid,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary } from 'react-native-image-picker'
 import RNFS from 'react-native-fs'
+import { CameraRoll } from '@react-native-camera-roll/camera-roll'
 import { api } from '../api/client'
 import { encryptForRecipient, decryptFromSender } from '../crypto/keys'
 import SaveRequestModal from '../components/SaveRequestModal'
@@ -17,23 +18,52 @@ export default function ChatScreen({ route }) {
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
   const [myUsername, setMyUsername] = useState('')
-  const [saveRequest, setSaveRequest] = useState(null)
+  const [saveRequest, setSaveRequest] = useState(null)   // pending request shown to sender
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  // track pending save requests we sent, keyed by messageId → { requestId, payload, contentType, label }
+  const pendingSaves = useRef({})
 
   useEffect(() => {
-    if (Platform.OS === 'android') {
-      try { require('react-native-flag-secure-android').activate() } catch {}
-    }
     AsyncStorage.getItem('username').then(u => setMyUsername(u ?? ''))
-    const interval = setInterval(pollInbox, POLL_INTERVAL)
+    const inboxTimer  = setInterval(pollInbox, POLL_INTERVAL)
+    const senderTimer = setInterval(pollSaveRequests, POLL_INTERVAL)
     pollInbox()
     return () => {
-      clearInterval(interval)
-      if (Platform.OS === 'android') {
-        try { require('react-native-flag-secure-android').deactivate() } catch {}
-      }
+      clearInterval(inboxTimer)
+      clearInterval(senderTimer)
     }
   }, [])
+
+  // Receiver polls their outbox for messages they sent, checks save-request status
+  const pollSaveRequests = useCallback(async () => {
+    const entries = Object.entries(pendingSaves.current)
+    if (!entries.length) return
+    for (const [messageId, info] of entries) {
+      try {
+        const { status } = await api.get(`/messages/save-requests/${info.requestId}/status`)
+        if (status === 'approved') {
+          delete pendingSaves.current[messageId]
+          await saveToDevice(info.payload, info.contentType, info.label)
+        } else if (status === 'denied') {
+          delete pendingSaves.current[messageId]
+          Alert.alert('Save denied', 'The sender did not allow saving this file.')
+        }
+      } catch {}
+    }
+  }, [])
+
+  // Sender polls for pending save requests from recipients
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      try {
+        const { requests } = await api.get('/messages/save-requests/pending')
+        if (requests?.length && !saveRequest) {
+          setSaveRequest(requests[0])
+        }
+      } catch {}
+    }, POLL_INTERVAL)
+    return () => clearInterval(timer)
+  }, [saveRequest])
 
   const pollInbox = useCallback(async () => {
     try {
@@ -92,7 +122,6 @@ export default function ChatScreen({ route }) {
 
   async function pickDocument() {
     setShowAttachMenu(false)
-    // Use image picker in mixed mode to pick any file
     const result = await launchImageLibrary({ mediaType: 'mixed', includeBase64: false })
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
@@ -103,12 +132,51 @@ export default function ChatScreen({ route }) {
     await sendPayload(base64, contentType, asset.fileName ?? 'file')
   }
 
-  async function requestSave(messageId) {
+  async function requestSave(message) {
+    if (message.contentType === 'text') return
     try {
-      await api.post(`/messages/${messageId}/save-request`, {})
+      const { requestId } = await api.post(`/messages/${message.id}/save-request`, {})
+      pendingSaves.current[message.id] = {
+        requestId,
+        payload: message.payload,
+        contentType: message.contentType,
+        label: message.label,
+      }
       Alert.alert('Save requested', 'Waiting for the sender to approve.')
     } catch (err) {
       Alert.alert('Error', err.message)
+    }
+  }
+
+  async function saveToDevice(payload, contentType, label) {
+    try {
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
+        )
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert('Permission denied', 'Storage permission is required to save files.')
+          return
+        }
+      }
+
+      const ext = contentType === 'image' ? 'jpg' : contentType === 'video' ? 'mp4' : 'bin'
+      const filename = label ?? `blink_${Date.now()}.${ext}`
+      const destPath = `${RNFS.CachesDirectoryPath}/${filename}`
+      await RNFS.writeFile(destPath, payload, 'base64')
+
+      if (contentType === 'image' || contentType === 'video') {
+        await CameraRoll.saveAsset(`file://${destPath}`, {
+          type: contentType === 'image' ? 'photo' : 'video',
+        })
+        Alert.alert('Saved', `${contentType === 'image' ? 'Photo' : 'Video'} saved to your gallery.`)
+      } else {
+        const downloadsPath = `${RNFS.DownloadDirectoryPath}/${filename}`
+        await RNFS.moveFile(destPath, downloadsPath)
+        Alert.alert('Saved', `File saved to Downloads: ${filename}`)
+      }
+    } catch (err) {
+      Alert.alert('Save failed', err.message)
     }
   }
 
@@ -116,6 +184,7 @@ export default function ChatScreen({ route }) {
     const isImage = item.contentType === 'image'
     const isVideo = item.contentType === 'video'
     const isDoc   = item.contentType === 'document'
+    const canSave = !item.mine && (isImage || isVideo || isDoc)
 
     return (
       <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
@@ -141,9 +210,9 @@ export default function ChatScreen({ route }) {
         {!isImage && !isVideo && !isDoc && (
           <Text style={styles.bubbleText}>{item.payload}</Text>
         )}
-        {!item.mine && (
-          <TouchableOpacity onPress={() => requestSave(item.id)}>
-            <Text style={styles.saveBtn}>Request save</Text>
+        {canSave && (
+          <TouchableOpacity onPress={() => requestSave(item)} style={styles.saveRow}>
+            <Text style={styles.saveBtn}>⬇ Request save</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -204,7 +273,9 @@ export default function ChatScreen({ route }) {
         <SaveRequestModal
           request={saveRequest}
           onDecide={async (decision) => {
-            await api.patch(`/messages/save-requests/${saveRequest.id}`, { decision })
+            try {
+              await api.patch(`/messages/save-requests/${saveRequest.id}`, { decision })
+            } catch {}
             setSaveRequest(null)
           }}
         />
@@ -220,7 +291,8 @@ const styles = StyleSheet.create({
   mine:          { backgroundColor: '#4f6ef7', alignSelf: 'flex-end' },
   theirs:        { backgroundColor: '#1f1f1f', alignSelf: 'flex-start' },
   bubbleText:    { color: '#fff', fontSize: 15 },
-  saveBtn:       { color: '#aaa', fontSize: 11, marginTop: 4 },
+  saveRow:       { marginTop: 6 },
+  saveBtn:       { color: '#aaa', fontSize: 12 },
   imagePreview:  { width: 200, height: 200, borderRadius: 10 },
   mediaChip:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   mediaIcon:     { fontSize: 20 },
