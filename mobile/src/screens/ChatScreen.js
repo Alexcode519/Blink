@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, Alert, Platform, Image, Modal, Pressable, PermissionsAndroid,
+  StyleSheet, Alert, Platform, Image, Modal, Pressable,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary } from 'react-native-image-picker'
 import RNFS from 'react-native-fs'
-import { CameraRoll } from '@react-native-camera-roll/camera-roll'
+import { saveToLibrary } from '../library/storage'
 import { api } from '../api/client'
 import { encryptForRecipient, decryptFromSender } from '../crypto/keys'
 import SaveRequestModal from '../components/SaveRequestModal'
@@ -150,31 +150,8 @@ export default function ChatScreen({ route }) {
 
   async function saveToDevice(payload, contentType, label) {
     try {
-      if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
-        )
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert('Permission denied', 'Storage permission is required to save files.')
-          return
-        }
-      }
-
-      const ext = contentType === 'image' ? 'jpg' : contentType === 'video' ? 'mp4' : 'bin'
-      const filename = label ?? `blink_${Date.now()}.${ext}`
-      const destPath = `${RNFS.CachesDirectoryPath}/${filename}`
-      await RNFS.writeFile(destPath, payload, 'base64')
-
-      if (contentType === 'image' || contentType === 'video') {
-        await CameraRoll.saveAsset(`file://${destPath}`, {
-          type: contentType === 'image' ? 'photo' : 'video',
-        })
-        Alert.alert('Saved', `${contentType === 'image' ? 'Photo' : 'Video'} saved to your gallery.`)
-      } else {
-        const downloadsPath = `${RNFS.DownloadDirectoryPath}/${filename}`
-        await RNFS.moveFile(destPath, downloadsPath)
-        Alert.alert('Saved', `File saved to Downloads: ${filename}`)
-      }
+      await saveToLibrary({ payload, contentType, label, fromUsername: recipientUsername })
+      Alert.alert('Saved', 'Added to your Blink Library.')
     } catch (err) {
       Alert.alert('Save failed', err.message)
     }

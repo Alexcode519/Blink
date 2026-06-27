@@ -6,6 +6,7 @@ import RegisterScreen from '../screens/RegisterScreen'
 import LoginScreen from '../screens/LoginScreen'
 import FindUserScreen from '../screens/FindUserScreen'
 import ChatScreen from '../screens/ChatScreen'
+import LibraryScreen from '../screens/LibraryScreen'
 
 const Stack = createNativeStackNavigator()
 
@@ -25,6 +26,7 @@ export default function AppNavigator() {
           <>
             <Stack.Screen name="FindUser" component={FindUserScreen} />
             <Stack.Screen name="Chat" component={ChatScreen} />
+            <Stack.Screen name="Library" component={LibraryScreen} />
           </>
         ) : (
           <>
