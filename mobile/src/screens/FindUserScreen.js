@@ -22,14 +22,8 @@ export default function FindUserScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Find someone</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter their username"
-        placeholderTextColor="#555"
-        autoCapitalize="none"
-        value={username}
-        onChangeText={setUsername}
-      />
+      <TextInput style={styles.input} placeholder="Enter their username" placeholderTextColor="#555"
+        autoCapitalize="none" value={username} onChangeText={setUsername} />
       <TouchableOpacity style={styles.button} onPress={handleFind} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? 'Searching…' : 'Start Chat'}</Text>
       </TouchableOpacity>

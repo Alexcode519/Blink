@@ -28,8 +28,12 @@ export default function AppNavigator() {
           </>
         ) : (
           <>
-            <Stack.Screen name="Register" component={RegisterScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register">
+              {props => <RegisterScreen {...props} onLogin={() => setIsLoggedIn(true)} />}
+            </Stack.Screen>
+            <Stack.Screen name="Login">
+              {props => <LoginScreen {...props} onLogin={() => setIsLoggedIn(true)} />}
+            </Stack.Screen>
           </>
         )}
       </Stack.Navigator>
