@@ -1,0 +1,124 @@
+import { pool } from '../db/pool.js'
+
+export async function messageRoutes(app) {
+  app.addHook('onRequest', async (req, reply) => {
+    try { await req.jwtVerify() }
+    catch { reply.code(401).send({ error: 'Unauthorized' }) }
+  })
+
+  // Send an encrypted message to a recipient
+  app.post('/messages', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['recipientUsername', 'ciphertext', 'nonce', 'contentType'],
+        properties: {
+          recipientUsername: { type: 'string' },
+          ciphertext:        { type: 'string' },
+          nonce:             { type: 'string' },
+          contentType:       { type: 'string', enum: ['text', 'image', 'video', 'document'] },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const { recipientUsername, ciphertext, nonce, contentType } = req.body
+    const { rows: recipients } = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [recipientUsername.toLowerCase()]
+    )
+    if (!recipients.length) return reply.code(404).send({ error: 'Recipient not found' })
+
+    const { rows } = await pool.query(
+      `INSERT INTO messages (sender_id, recipient_id, ciphertext, nonce, content_type)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
+      [req.user.userId, recipients[0].id, ciphertext, nonce, contentType]
+    )
+    return { messageId: rows[0].id, createdAt: rows[0].created_at }
+  })
+
+  // Poll for undelivered messages — returns them and marks as delivered (server deletes after)
+  app.get('/messages/inbox', async (req) => {
+    const { rows } = await pool.query(
+      `SELECT m.id, u.username AS senderUsername, m.ciphertext, m.nonce, m.content_type, m.created_at
+       FROM messages m
+       JOIN users u ON u.id = m.sender_id
+       WHERE m.recipient_id = $1 AND m.delivered = FALSE
+       ORDER BY m.created_at ASC`,
+      [req.user.userId]
+    )
+
+    if (rows.length) {
+      const ids = rows.map(r => r.id)
+      // Mark delivered — a cleanup job can hard-delete these after a short TTL
+      await pool.query(
+        'UPDATE messages SET delivered = TRUE WHERE id = ANY($1::uuid[])',
+        [ids]
+      )
+    }
+
+    return { messages: rows }
+  })
+
+  // Recipient requests permission to save a message
+  app.post('/messages/:messageId/save-request', async (req, reply) => {
+    const { rows: msgs } = await pool.query(
+      'SELECT id, recipient_id FROM messages WHERE id = $1',
+      [req.params.messageId]
+    )
+    if (!msgs.length) return reply.code(404).send({ error: 'Message not found' })
+    if (msgs[0].recipient_id !== req.user.userId) return reply.code(403).send({ error: 'Forbidden' })
+
+    const { rows } = await pool.query(
+      `INSERT INTO save_requests (message_id) VALUES ($1)
+       ON CONFLICT DO NOTHING RETURNING id`,
+      [req.params.messageId]
+    )
+    return { requestId: rows[0]?.id }
+  })
+
+  // Sender polls for pending save requests on their sent messages
+  app.get('/messages/save-requests/pending', async (req) => {
+    const { rows } = await pool.query(
+      `SELECT sr.id, sr.message_id, u.username AS requesterUsername, m.content_type
+       FROM save_requests sr
+       JOIN messages m ON m.id = sr.message_id
+       JOIN users u ON u.id = m.recipient_id
+       WHERE m.sender_id = $1 AND sr.status = 'pending'`,
+      [req.user.userId]
+    )
+    return { requests: rows }
+  })
+
+  // Sender approves or denies a save request
+  app.patch('/messages/save-requests/:requestId', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['decision'],
+        properties: { decision: { type: 'string', enum: ['approved', 'denied'] } },
+      },
+    },
+  }, async (req, reply) => {
+    const { rows } = await pool.query(
+      `UPDATE save_requests sr SET status = $1
+       FROM messages m
+       WHERE sr.id = $2 AND sr.message_id = m.id AND m.sender_id = $3
+       RETURNING sr.id`,
+      [req.body.decision, req.params.requestId, req.user.userId]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Request not found' })
+    return { status: req.body.decision }
+  })
+
+  // Recipient polls for the outcome of their save request
+  app.get('/messages/save-requests/:requestId/status', async (req, reply) => {
+    const { rows } = await pool.query(
+      `SELECT sr.status FROM save_requests sr
+       JOIN messages m ON m.id = sr.message_id
+       WHERE sr.id = $1 AND m.recipient_id = $2`,
+      [req.params.requestId, req.user.userId]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Not found' })
+    return { status: rows[0].status }
+  })
+}
