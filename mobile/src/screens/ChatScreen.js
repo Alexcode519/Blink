@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, Alert, Platform, Image, Modal, Pressable,
+  StyleSheet, Alert, Platform, Image, Modal, Pressable, PermissionsAndroid,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker'
@@ -240,6 +240,13 @@ export default function ChatScreen({ route, navigation }) {
 
   async function takePhoto() {
     setShowAttachMenu(false)
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA)
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert('Permission denied', 'Camera permission is required to take photos.')
+        return
+      }
+    }
     const result = await launchCamera({ mediaType: 'photo', includeBase64: true, quality: 0.7, saveToPhotos: false })
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
@@ -382,9 +389,6 @@ export default function ChatScreen({ route, navigation }) {
       />
 
       <View style={styles.inputRow}>
-        <TouchableOpacity onPress={takePhoto} style={styles.iconBtn}>
-          <Text style={styles.iconText}>📷</Text>
-        </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={styles.iconBtn}>
           <Text style={styles.iconText}>📎</Text>
         </TouchableOpacity>
