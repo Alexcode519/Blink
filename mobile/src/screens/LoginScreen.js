@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { api } from '../api/client'
@@ -7,6 +7,11 @@ export default function LoginScreen({ navigation, onLogin }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Pre-fill username if already logged in (locked state)
+  useEffect(() => {
+    AsyncStorage.getItem('username').then(u => { if (u) setUsername(u) })
+  }, [])
 
   async function handleLogin() {
     if (!username.trim() || !password.trim()) return

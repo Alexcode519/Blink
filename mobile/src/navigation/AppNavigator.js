@@ -27,8 +27,8 @@ export default function AppNavigator() {
       if (patternEnabled === 'true' && pattern) {
         setAuthState('pattern')
       } else {
-        setAuthState('loggedIn')
-        setupPushNotifications()
+        // Always require login on cold start (e.g. opened from notification)
+        setAuthState('locked')
       }
     }
     check()
@@ -39,7 +39,7 @@ export default function AppNavigator() {
   function handleLogin() { setAuthState('loggedIn'); setupPushNotifications() }
   function handleLogout() { setAuthState('loggedOut') }
   function handlePatternSuccess() { setAuthState('loggedIn'); setupPushNotifications() }
-  function handlePatternFallback() { setAuthState('loggedOut') }
+  function handlePatternFallback() { setAuthState('locked') }
 
   return (
     <NavigationContainer key={authState}>
@@ -47,6 +47,10 @@ export default function AppNavigator() {
         {authState === 'pattern' ? (
           <Stack.Screen name="PatternLogin">
             {() => <PatternLoginScreen onSuccess={handlePatternSuccess} onFallback={handlePatternFallback} />}
+          </Stack.Screen>
+        ) : authState === 'locked' ? (
+          <Stack.Screen name="Login">
+            {props => <LoginScreen {...props} onLogin={handleLogin} />}
           </Stack.Screen>
         ) : authState === 'loggedIn' ? (
           <>
