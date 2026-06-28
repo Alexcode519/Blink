@@ -32,13 +32,12 @@ export default function ChatScreen({ route, navigation }) {
     RNFS.exists(AVATAR_PATH).then(exists => {
       if (exists) setMyAvatar(`file://${AVATAR_PATH}?t=${Date.now()}`)
     })
-    // Fetch latest public key, load history, then start polling
-    api.get(`/users/${recipientUsername}`).then(({ publicKey }) => {
-      if (publicKey) recipientPublicKeyRef.current = publicKey
-      return loadHistory()
-    }).catch(() => {}).finally(() => {
-      pollInbox()
-    })
+    // Fetch latest public key, then load history, then start polling
+    api.get(`/users/${recipientUsername}`)
+      .then(({ publicKey }) => { if (publicKey) recipientPublicKeyRef.current = publicKey })
+      .catch(() => {})
+      .then(() => loadHistory())
+      .finally(() => pollInbox())
     const inboxTimer  = setInterval(pollInbox, POLL_INTERVAL)
     const senderTimer = setInterval(pollSaveRequests, POLL_INTERVAL)
     return () => { clearInterval(inboxTimer); clearInterval(senderTimer) }
@@ -201,13 +200,13 @@ export default function ChatScreen({ route, navigation }) {
     const canSave = !item.mine && (isImage || isVideo || isDoc)
 
     return (
-      <View style={[styles.bubbleWrap, item.mine ? styles.mineWrap : styles.theirsWrap]}>
-        {item.mine && (
-          myAvatar
-            ? <Image source={{ uri: myAvatar }} style={styles.avatarThumb} />
-            : <View style={styles.avatarPlaceholder}><Text style={styles.avatarInitial}>{myUsername[0]?.toUpperCase()}</Text></View>
-        )}
-        <View style={styles.bubbleCol}>
+      <View style={item.mine ? styles.mineOuter : styles.theirsOuter}>
+        <View style={[styles.bubbleWrap, item.mine ? styles.mineWrap : styles.theirsWrap]}>
+          {item.mine && (
+            myAvatar
+              ? <Image source={{ uri: myAvatar }} style={styles.avatarThumb} />
+              : <View style={styles.avatarPlaceholder}><Text style={styles.avatarInitial}>{myUsername[0]?.toUpperCase()}</Text></View>
+          )}
           <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
             {isImage && (
               <Image source={{ uri: `data:image/jpeg;base64,${item.payload}` }} style={styles.imagePreview} resizeMode="cover" />
@@ -240,12 +239,12 @@ export default function ChatScreen({ route, navigation }) {
               </TouchableOpacity>
             )}
           </View>
-          {item.mine && (
-            <View style={styles.tickRow}>
-              <StatusTick status={item.status} />
-            </View>
-          )}
         </View>
+        {item.mine && (
+          <View style={styles.tickRow}>
+            <StatusTick status={item.status} />
+          </View>
+        )}
       </View>
     )
   }
@@ -329,7 +328,9 @@ const styles = StyleSheet.create({
   headerTitle:   { color: '#fff', fontSize: 17, fontWeight: '600' },
   backBtn:       { width: 36 },
   backText:      { color: '#4f6ef7', fontSize: 22 },
-  bubbleWrap:       { marginBottom: 6, flexDirection: 'row', alignItems: 'flex-end' },
+  mineOuter:        { alignItems: 'flex-end', marginBottom: 6 },
+  theirsOuter:      { alignItems: 'flex-start', marginBottom: 6 },
+  bubbleWrap:       { flexDirection: 'row', alignItems: 'flex-end' },
   mineWrap:         { justifyContent: 'flex-end' },
   theirsWrap:       { justifyContent: 'flex-start' },
   avatarThumb:      { width: 28, height: 28, borderRadius: 14, marginLeft: 6 },
@@ -339,9 +340,8 @@ const styles = StyleSheet.create({
   mine:          { backgroundColor: '#4f6ef7' },
   theirs:        { backgroundColor: '#1f1f1f' },
   bubbleText:    { color: '#fff', fontSize: 15, lineHeight: 20 },
-  bubbleCol:     { flexDirection: 'column', alignItems: 'flex-end' },
   saveBtn:       { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 },
-  tickRow:       { alignSelf: 'flex-end', marginTop: 2, marginRight: 2 },
+  tickRow:       { marginTop: 2, marginRight: 4 },
   tick:          { color: 'rgba(255,255,255,0.4)', fontSize: 11 },
   tickDelivered: { color: '#a0c4ff' },
   imagePreview:  { width: 200, height: 200, borderRadius: 10 },
