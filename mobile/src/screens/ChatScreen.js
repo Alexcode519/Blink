@@ -115,8 +115,12 @@ export default function ChatScreen({ route, navigation }) {
   const loadHistory = useCallback(async () => {
     try {
       const myUser = await AsyncStorage.getItem('username')
-      const { messages: history } = await api.get(`/messages/history/${recipientUsername}`)
+      const [{ messages: history }, receipts] = await Promise.all([
+        api.get(`/messages/history/${recipientUsername}`),
+        api.get(`/messages/read-receipts/${recipientUsername}`).catch(() => ({ readIds: [] })),
+      ])
       if (!history.length) return
+      const readSet = new Set(receipts?.readIds ?? [])
       const decoded = await Promise.all(history.map(async (m) => {
         // Postgres lowercases unquoted aliases: senderUsername → senderusername
         const sender = m.senderusername ?? m.senderUsername ?? m.sender_username ?? ''
@@ -126,7 +130,8 @@ export default function ChatScreen({ route, navigation }) {
           const { payload, contentType, label } = cached
             ? JSON.parse(cached)
             : { payload: '[Sent]', contentType: m.content_type, label: null }
-          return { id: m.id, from: sender, payload, contentType, label, mine: true, status: 'delivered' }
+          const status = readSet.has(m.id) ? 'read' : 'delivered'
+          return { id: m.id, from: sender, payload, contentType, label, mine: true, status }
         }
         try {
           let payload = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKeyRef.current)
@@ -468,9 +473,9 @@ const styles = StyleSheet.create({
   theirs:        { backgroundColor: '#1f1f1f' },
   bubbleText:    { color: '#fff', fontSize: 15, lineHeight: 20 },
   saveBtn:       { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 },
-  tickRow:       { marginTop: 2, marginRight: 4 },
-  tick:     { color: 'rgba(255,255,255,0.4)', fontSize: 11 },
-  tickRead: { color: '#4fc3f7' },
+  tickRow:       { marginTop: 2, marginRight: 4, alignItems: 'flex-end' },
+  tick:     { color: '#888', fontSize: 13 },
+  tickRead: { color: '#4fc3f7', fontSize: 13 },
   imagePreview:  { width: 200, height: 200, borderRadius: 10 },
   videoPreview:  { width: 220, height: 160, borderRadius: 10 },
   mediaChip:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
