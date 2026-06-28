@@ -11,7 +11,9 @@ export async function generateAndStoreKeyPair() {
   const privateKeyB64 = encodeBase64(keyPair.secretKey)
   const publicKeyB64 = encodeBase64(keyPair.publicKey)
 
-  // Store in both keychain and AsyncStorage as backup
+  // Clear any existing key first — Keychain persists across reinstalls
+  // which causes mismatches if server has a newer public key
+  try { await Keychain.resetGenericPassword({ service: KEYCHAIN_SERVICE }) } catch {}
   try {
     await Keychain.setGenericPassword('privateKey', privateKeyB64, { service: KEYCHAIN_SERVICE })
   } catch (e) {
