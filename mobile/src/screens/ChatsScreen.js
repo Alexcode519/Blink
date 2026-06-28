@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import Svg, { Path, Line, Circle } from 'react-native-svg'
@@ -30,18 +30,31 @@ export default function ChatsScreen({ navigation }) {
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
   const [avatarUri, setAvatarUri] = useState(null)
+  const isFocused = useRef(false)
 
-  useFocusEffect(useCallback(() => {
+  function loadConversations() {
     api.get('/messages/conversations')
       .then(({ conversations: c }) => setConversations(c))
       .catch(() => {})
       .finally(() => setLoading(false))
+  }
 
+  useFocusEffect(useCallback(() => {
+    isFocused.current = true
+    loadConversations()
     RNFS.exists(AVATAR_PATH).then(exists => {
       if (exists) setAvatarUri(`file://${AVATAR_PATH}?t=${Date.now()}`)
       else setAvatarUri(null)
     })
+    return () => { isFocused.current = false }
   }, []))
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (isFocused.current) loadConversations()
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [])
 
   function deleteConversation(username) {
     Alert.alert('Delete chat', `Delete all messages with ${username}?`, [
