@@ -1,21 +1,27 @@
 import messaging from '@react-native-firebase/messaging'
-import { Alert, Platform } from 'react-native'
+import notifee, { AndroidImportance } from '@notifee/react-native'
 import { api } from '../api/client'
 
+async function ensureChannel() {
+  await notifee.createChannel({
+    id: 'blink_messages',
+    name: 'Messages',
+    importance: AndroidImportance.HIGH,
+    vibration: true,
+  })
+}
+
 export async function setupPushNotifications() {
+  await ensureChannel()
+
   // Request permission (required on iOS and Android 13+)
+  await notifee.requestPermission()
   const authStatus = await messaging().requestPermission()
   const enabled =
     authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
     authStatus === messaging.AuthorizationStatus.PROVISIONAL
 
-  if (!enabled) {
-    Alert.alert(
-      'Notifications disabled',
-      'Enable notifications in Settings to receive messages when the app is closed.',
-    )
-    return
-  }
+  if (!enabled) return
 
   // Get FCM token and register with backend
   const fcmToken = await messaging().getToken()
@@ -28,10 +34,18 @@ export async function setupPushNotifications() {
     try { await api.post('/users/fcm-token', { fcmToken: newToken }) } catch {}
   })
 
-  // Foreground: show a system-style alert (in-app banner)
+  // Foreground: show a proper heads-up notification banner
   messaging().onMessage(async (remoteMessage) => {
-    const title = remoteMessage.notification?.title ?? remoteMessage.data?.title ?? 'Blink'
-    const body  = remoteMessage.notification?.body  ?? remoteMessage.data?.body  ?? 'New message'
-    Alert.alert(title, body)
+    const title = remoteMessage.notification?.title ?? 'Blink'
+    const body  = remoteMessage.notification?.body  ?? 'New message'
+    await notifee.displayNotification({
+      title,
+      body,
+      android: {
+        channelId: 'blink_messages',
+        importance: AndroidImportance.HIGH,
+        pressAction: { id: 'default' },
+      },
+    })
   })
 }
