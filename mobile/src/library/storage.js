@@ -16,7 +16,12 @@ export async function saveToLibrary({ payload, contentType, label, fromUsername 
   const filename = `${id}.${ext}`
   const path = `${LIB_DIR}/${filename}`
 
-  await RNFS.writeFile(path, payload, 'base64')
+  if (typeof payload === 'string' && payload.startsWith('file://')) {
+    // Already saved as a local file — just copy it
+    await RNFS.copyFile(payload.replace('file://', ''), path)
+  } else {
+    await RNFS.writeFile(path, payload, 'base64')
+  }
 
   const index = await loadIndex()
   index.push({ id, filename, path, contentType, label: label ?? filename, fromUsername, savedAt: Date.now() })
