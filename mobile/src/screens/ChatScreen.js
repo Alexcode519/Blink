@@ -11,6 +11,7 @@ import { saveToLibrary } from '../library/storage'
 import { api } from '../api/client'
 import { encryptForRecipient, decryptFromSender } from '../crypto/keys'
 import SaveRequestModal from '../components/SaveRequestModal'
+import Icon from 'react-native-vector-icons/Feather'
 import notifee from '@notifee/react-native'
 import { notifIdForSender } from '../notifications/setup'
 
@@ -404,7 +405,7 @@ export default function ChatScreen({ route, navigation }) {
 
       <View style={styles.inputRow}>
         <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={styles.iconBtn}>
-          <Text style={styles.iconText}>📎</Text>
+          <Icon name="paperclip" size={22} color="#888" />
         </TouchableOpacity>
         <TextInput
           ref={inputRef}
@@ -428,19 +429,19 @@ export default function ChatScreen({ route, navigation }) {
           <View style={styles.menuSheet}>
             <Text style={styles.menuTitle}>Send attachment</Text>
             <TouchableOpacity style={styles.menuItem} onPress={takePhoto}>
-              <Text style={styles.menuIcon}>📷</Text>
+              <View style={styles.menuIconWrap}><Icon name="camera" size={20} color="#fff" /></View>
               <Text style={styles.menuLabel}>Camera</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={pickPhoto}>
-              <Text style={styles.menuIcon}>🖼️</Text>
+              <View style={styles.menuIconWrap}><Icon name="image" size={20} color="#fff" /></View>
               <Text style={styles.menuLabel}>Photo from gallery</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={pickVideo}>
-              <Text style={styles.menuIcon}>🎥</Text>
+              <View style={styles.menuIconWrap}><Icon name="video" size={20} color="#fff" /></View>
               <Text style={styles.menuLabel}>Video</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={pickDocument}>
-              <Text style={styles.menuIcon}>📄</Text>
+              <View style={styles.menuIconWrap}><Icon name="file" size={20} color="#fff" /></View>
               <Text style={styles.menuLabel}>File</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuCancel} onPress={() => setShowAttachMenu(false)}>
@@ -500,7 +501,7 @@ const styles = StyleSheet.create({
   menuSheet:     { backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 },
   menuTitle:     { color: '#888', fontSize: 13, textAlign: 'center', marginBottom: 16 },
   menuItem:      { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' },
-  menuIcon:      { fontSize: 24, width: 32 },
+  menuIconWrap:  { width: 36, height: 36, borderRadius: 10, backgroundColor: '#2a2a2a', alignItems: 'center', justifyContent: 'center' },
   menuLabel:     { color: '#fff', fontSize: 16 },
   menuCancel:    { paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   menuCancelText:{ color: '#4f6ef7', fontSize: 16 },
