@@ -63,18 +63,18 @@ export default function ChatsScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
+        <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
+          <FeatherIcon />
+        </TouchableOpacity>
+
+        <Text style={styles.title}>Blink</Text>
+
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.iconBtn}>
           {avatarUri ? (
             <Image source={{ uri: avatarUri }} style={styles.profileThumb} />
           ) : (
             <PersonIcon />
           )}
-        </TouchableOpacity>
-
-        <Text style={styles.title}>Blink</Text>
-
-        <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
-          <FeatherIcon />
         </TouchableOpacity>
       </View>
 

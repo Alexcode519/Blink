@@ -1,35 +1,51 @@
 import nacl from 'tweetnacl'
 import { encodeBase64, decodeBase64 } from 'tweetnacl-util'
 import * as Keychain from 'react-native-keychain'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const KEYCHAIN_SERVICE = 'blink_keypair'
+const STORAGE_KEY = 'blink_private_key_backup'
 
 export async function generateAndStoreKeyPair() {
   const keyPair = nacl.box.keyPair()
-  await Keychain.setGenericPassword(
-    'privateKey',
-    encodeBase64(keyPair.secretKey),
-    { service: KEYCHAIN_SERVICE }
-  )
-  return { publicKey: encodeBase64(keyPair.publicKey) }
+  const privateKeyB64 = encodeBase64(keyPair.secretKey)
+  const publicKeyB64 = encodeBase64(keyPair.publicKey)
+
+  // Store in both keychain and AsyncStorage as backup
+  try {
+    await Keychain.setGenericPassword('privateKey', privateKeyB64, { service: KEYCHAIN_SERVICE })
+  } catch (e) {
+    console.warn('Keychain store failed:', e.message)
+  }
+  await AsyncStorage.setItem(STORAGE_KEY, privateKeyB64)
+
+  return { publicKey: publicKeyB64 }
 }
 
 async function loadPrivateKey() {
-  const creds = await Keychain.getGenericPassword({ service: KEYCHAIN_SERVICE })
-  if (!creds) throw new Error('No private key found — re-register')
-  return decodeBase64(creds.password)
+  // Try keychain first
+  try {
+    const creds = await Keychain.getGenericPassword({ service: KEYCHAIN_SERVICE })
+    if (creds && creds.password) return decodeBase64(creds.password)
+  } catch (e) {
+    console.warn('Keychain load failed:', e.message)
+  }
+
+  // Fallback to AsyncStorage
+  const backup = await AsyncStorage.getItem(STORAGE_KEY)
+  if (backup) return decodeBase64(backup)
+
+  throw new Error('No private key found — re-register')
 }
 
 export async function encryptForRecipient(plaintext, recipientPublicKeyB64) {
   const privateKey = await loadPrivateKey()
   const recipientPublicKey = decodeBase64(recipientPublicKeyB64)
   const nonce = nacl.randomBytes(nacl.box.nonceLength)
-  const ciphertext = nacl.box(
-    new TextEncoder().encode(plaintext),
-    nonce,
-    recipientPublicKey,
-    privateKey
+  const encoded = Uint8Array.from(
+    unescape(encodeURIComponent(plaintext)), c => c.charCodeAt(0)
   )
+  const ciphertext = nacl.box(encoded, nonce, recipientPublicKey, privateKey)
   return { ciphertext: encodeBase64(ciphertext), nonce: encodeBase64(nonce) }
 }
 
@@ -42,6 +58,6 @@ export async function decryptFromSender(ciphertextB64, nonceB64, senderPublicKey
     senderPublicKey,
     privateKey
   )
-  if (!decrypted) throw new Error('Decryption failed')
-  return new TextDecoder().decode(decrypted)
+  if (!decrypted) throw new Error('Decryption failed — key mismatch')
+  return decodeURIComponent(escape(String.fromCharCode(...decrypted)))
 }

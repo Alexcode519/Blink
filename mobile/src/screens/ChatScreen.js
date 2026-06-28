@@ -15,7 +15,7 @@ import SaveRequestModal from '../components/SaveRequestModal'
 const POLL_INTERVAL = 3000
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 
-export default function ChatScreen({ route }) {
+export default function ChatScreen({ route, navigation }) {
   const { recipientUsername, recipientPublicKey } = route.params
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
@@ -25,15 +25,20 @@ export default function ChatScreen({ route }) {
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const pendingSaves = useRef({})
   const listRef = useRef(null)
+  const recipientPublicKeyRef = useRef(recipientPublicKey)
 
   useEffect(() => {
     AsyncStorage.getItem('username').then(u => setMyUsername(u ?? ''))
     RNFS.exists(AVATAR_PATH).then(exists => {
       if (exists) setMyAvatar(`file://${AVATAR_PATH}?t=${Date.now()}`)
     })
+    // Fetch latest public key first, then start polling
+    api.get(`/users/${recipientUsername}`).then(({ publicKey }) => {
+      if (publicKey) recipientPublicKeyRef.current = publicKey
+      pollInbox()
+    }).catch(() => { pollInbox() })
     const inboxTimer  = setInterval(pollInbox, POLL_INTERVAL)
     const senderTimer = setInterval(pollSaveRequests, POLL_INTERVAL)
-    pollInbox()
     return () => { clearInterval(inboxTimer); clearInterval(senderTimer) }
   }, [])
 
@@ -71,7 +76,7 @@ export default function ChatScreen({ route }) {
       const decrypted = await Promise.all(
         incoming.map(async (m) => {
           try {
-            const plaintext = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKey)
+            const plaintext = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKeyRef.current)
             return { id: m.id, from: m.senderUsername, payload: plaintext, contentType: m.content_type, mine: false, status: 'delivered' }
           } catch {
             return { id: m.id, from: m.senderUsername, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered' }
@@ -85,7 +90,7 @@ export default function ChatScreen({ route }) {
 
   async function sendPayload(payload, contentType, label) {
     try {
-      const { ciphertext, nonce } = await encryptForRecipient(payload, recipientPublicKey)
+      const { ciphertext, nonce } = await encryptForRecipient(payload, recipientPublicKeyRef.current)
       const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType })
       const msg = { id: messageId ?? Date.now().toString(), from: myUsername, payload, contentType, label, mine: true, status: 'sent' }
       setMessages(prev => [...prev, msg])
@@ -211,7 +216,11 @@ export default function ChatScreen({ route }) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>←</Text>
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>{recipientUsername}</Text>
+        <View style={styles.backBtn} />
       </View>
 
       <FlatList
@@ -279,8 +288,10 @@ export default function ChatScreen({ route }) {
 
 const styles = StyleSheet.create({
   container:     { flex: 1, backgroundColor: '#0a0a0a' },
-  header:        { paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1f1f1f', alignItems: 'center' },
+  header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1f1f1f' },
   headerTitle:   { color: '#fff', fontSize: 17, fontWeight: '600' },
+  backBtn:       { width: 36 },
+  backText:      { color: '#4f6ef7', fontSize: 22 },
   bubbleWrap:       { marginBottom: 6, flexDirection: 'row', alignItems: 'flex-end' },
   mineWrap:         { justifyContent: 'flex-end' },
   theirsWrap:       { justifyContent: 'flex-start' },
