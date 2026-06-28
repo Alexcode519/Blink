@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import messaging from '@react-native-firebase/messaging'
 import { setupPushNotifications } from '../notifications/setup'
 import RegisterScreen from '../screens/RegisterScreen'
 import LoginScreen from '../screens/LoginScreen'
@@ -16,10 +17,21 @@ import PatternLoginScreen from '../screens/PatternLoginScreen'
 const Stack = createNativeStackNavigator()
 
 export default function AppNavigator() {
-  const [authState, setAuthState] = useState(null) // null | 'pattern' | 'loggedIn' | 'loggedOut'
+  const [authState, setAuthState] = useState(null)
+  const navRef = useRef(null)
+  // Username to deep-link into after auth completes
+  const pendingChatRef = useRef(null)
 
   useEffect(() => {
     async function check() {
+      // Check if app was opened from a notification tap
+      try {
+        const initial = await messaging().getInitialNotification()
+        if (initial?.data?.senderUsername) {
+          pendingChatRef.current = initial.data.senderUsername
+        }
+      } catch {}
+
       const token = await AsyncStorage.getItem('token')
       if (!token) { setAuthState('loggedOut'); return }
       const patternEnabled = await AsyncStorage.getItem('blink_pattern_enabled')
@@ -27,7 +39,6 @@ export default function AppNavigator() {
       if (patternEnabled === 'true' && pattern) {
         setAuthState('pattern')
       } else {
-        // Always require login on cold start (e.g. opened from notification)
         setAuthState('locked')
       }
     }
@@ -36,13 +47,32 @@ export default function AppNavigator() {
 
   if (authState === null) return null
 
-  function handleLogin() { setAuthState('loggedIn'); setupPushNotifications() }
+  function openPendingChat() {
+    const sender = pendingChatRef.current
+    pendingChatRef.current = null
+    if (sender && navRef.current) {
+      // Small delay so the navigator has mounted
+      setTimeout(() => {
+        navRef.current.navigate('Chat', { recipientUsername: sender })
+      }, 300)
+    }
+  }
+
+  function handleLogin() {
+    setAuthState('loggedIn')
+    setupPushNotifications()
+    openPendingChat()
+  }
   function handleLogout() { setAuthState('loggedOut') }
-  function handlePatternSuccess() { setAuthState('loggedIn'); setupPushNotifications() }
+  function handlePatternSuccess() {
+    setAuthState('loggedIn')
+    setupPushNotifications()
+    openPendingChat()
+  }
   function handlePatternFallback() { setAuthState('locked') }
 
   return (
-    <NavigationContainer key={authState}>
+    <NavigationContainer ref={navRef} key={authState}>
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0a0a0a' } }}>
         {authState === 'pattern' ? (
           <Stack.Screen name="PatternLogin">
