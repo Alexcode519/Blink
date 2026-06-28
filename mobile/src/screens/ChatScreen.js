@@ -24,6 +24,7 @@ export default function ChatScreen({ route, navigation }) {
   const [text, setText] = useState('')
   const [myUsername, setMyUsername] = useState('')
   const [myAvatar, setMyAvatar] = useState(null)
+  const [recipientAvatar, setRecipientAvatar] = useState(null)
   const [saveRequest, setSaveRequest] = useState(null)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [recipientStatus, setRecipientStatus] = useState(null) // { online, lastSeen, isTyping }
@@ -52,7 +53,10 @@ export default function ChatScreen({ route, navigation }) {
       }
     }).catch(() => {})
     api.get(`/users/${recipientUsername}`)
-      .then(({ publicKey }) => { if (publicKey) recipientPublicKeyRef.current = publicKey })
+      .then(({ publicKey, avatar }) => {
+        if (publicKey) recipientPublicKeyRef.current = publicKey
+        if (avatar) setRecipientAvatar(`data:image/jpeg;base64,${avatar}`)
+      })
       .catch(() => {})
       .then(() => loadHistory())
       .finally(() => pollInbox())
@@ -383,6 +387,11 @@ export default function ChatScreen({ route, navigation }) {
     return (
       <View style={item.mine ? styles.mineOuter : styles.theirsOuter}>
         <View style={[styles.bubbleWrap, item.mine ? styles.mineWrap : styles.theirsWrap]}>
+          {!item.mine && (
+            recipientAvatar
+              ? <Image source={{ uri: recipientAvatar }} style={styles.avatarThumb} />
+              : <View style={styles.avatarPlaceholder}><Text style={styles.avatarInitial}>{recipientUsername[0]?.toUpperCase()}</Text></View>
+          )}
           {item.mine && (
             myAvatar
               ? <Image source={{ uri: myAvatar }} style={styles.avatarThumb} />
@@ -442,7 +451,13 @@ export default function ChatScreen({ route, navigation }) {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{recipientUsername}</Text>
+          <View style={styles.headerAvatarRow}>
+            {recipientAvatar
+              ? <Image source={{ uri: recipientAvatar }} style={styles.headerAvatar} />
+              : <View style={styles.headerAvatarPlaceholder}><Text style={styles.headerAvatarInitial}>{recipientUsername[0]?.toUpperCase()}</Text></View>
+            }
+            <Text style={styles.headerTitle}>{recipientUsername}</Text>
+          </View>
           {recipientStatus && (
             <Text style={[styles.headerStatus, recipientStatus.isTyping && styles.headerTyping]}>
               {recipientStatus.isTyping
@@ -530,8 +545,12 @@ export default function ChatScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container:     { flex: 1, backgroundColor: '#0a0a0a' },
   header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1f1f1f' },
-  headerCenter:  { alignItems: 'center', flex: 1 },
-  headerTitle:   { color: '#fff', fontSize: 17, fontWeight: '600' },
+  headerCenter:        { alignItems: 'center', flex: 1 },
+  headerAvatarRow:     { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerAvatar:        { width: 32, height: 32, borderRadius: 16 },
+  headerAvatarPlaceholder: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center' },
+  headerAvatarInitial: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  headerTitle:         { color: '#fff', fontSize: 17, fontWeight: '600' },
   headerStatus:  { color: '#555', fontSize: 12, marginTop: 1 },
   headerTyping:  { color: '#4f6ef7' },
   backBtn:       { width: 36 },

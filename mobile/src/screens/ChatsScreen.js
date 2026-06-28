@@ -82,9 +82,10 @@ export default function ChatsScreen({ navigation }) {
         })}
         onLongPress={() => deleteConversation(item.other_username)}
       >
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{item.other_username[0].toUpperCase()}</Text>
-        </View>
+        {item.other_avatar
+          ? <Image source={{ uri: `data:image/jpeg;base64,${item.other_avatar}` }} style={styles.avatarImg} />
+          : <View style={styles.avatar}><Text style={styles.avatarText}>{item.other_username[0].toUpperCase()}</Text></View>
+        }
         <Text style={styles.username}>{item.other_username}</Text>
       </TouchableOpacity>
     )
@@ -138,6 +139,7 @@ const styles = StyleSheet.create({
   newChatText:  { color: '#fff', fontWeight: '600', fontSize: 15 },
   row:          { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#1a1a1a', gap: 14 },
   avatar:       { width: 44, height: 44, borderRadius: 22, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center' },
+  avatarImg:    { width: 44, height: 44, borderRadius: 22 },
   avatarText:   { color: '#fff', fontSize: 18, fontWeight: '700' },
   username:     { color: '#fff', fontSize: 16, fontWeight: '500' },
   hint:         { color: '#555', textAlign: 'center', marginTop: 60, fontSize: 15 },

@@ -41,12 +41,14 @@ export default function ProfileScreen({ navigation, onLogout }) {
   }
 
   async function pickAvatar() {
-    const result = await launchImageLibrary({ mediaType: 'photo', includeBase64: true, quality: 0.7 })
+    const result = await launchImageLibrary({ mediaType: 'photo', includeBase64: true, quality: 0.5, maxWidth: 400, maxHeight: 400 })
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
     const base64 = asset.base64 ?? await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
     await RNFS.writeFile(AVATAR_PATH, base64, 'base64')
     setAvatarUri(`file://${AVATAR_PATH}?t=${Date.now()}`)
+    // Sync to backend so other users can see it
+    api.post('/users/me/avatar', { avatar: base64 }).catch(() => {})
   }
 
   async function saveUsername() {

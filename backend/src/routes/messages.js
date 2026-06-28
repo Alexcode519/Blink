@@ -60,12 +60,14 @@ export async function messageRoutes(app) {
         other_user,
         other_username,
         other_public_key,
+        other_avatar,
         last_at
        FROM (
          SELECT
            CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END AS other_user,
            CASE WHEN m.sender_id = $1 THEN ru.username ELSE su.username END AS other_username,
            CASE WHEN m.sender_id = $1 THEN ru.public_key ELSE su.public_key END AS other_public_key,
+           CASE WHEN m.sender_id = $1 THEN ru.avatar ELSE su.avatar END AS other_avatar,
            m.created_at AS last_at
          FROM messages m
          JOIN users su ON su.id = m.sender_id
