@@ -15,16 +15,14 @@ import SetPatternScreen from '../screens/SetPatternScreen'
 import PatternLoginScreen from '../screens/PatternLoginScreen'
 
 const Stack = createNativeStackNavigator()
+const screenOpts = { headerShown: false, contentStyle: { backgroundColor: '#0a0a0a' } }
 
 export default function AppNavigator() {
   const [authState, setAuthState] = useState(null)
-  const navRef = useRef(null)
-  // Username to deep-link into after auth completes
   const pendingChatRef = useRef(null)
 
   useEffect(() => {
     async function check() {
-      // Check if app was opened from a notification tap
       try {
         const initial = await messaging().getInitialNotification()
         if (initial?.data?.senderUsername) {
@@ -47,67 +45,75 @@ export default function AppNavigator() {
 
   if (authState === null) return null
 
-  function openPendingChat() {
-    const sender = pendingChatRef.current
-    pendingChatRef.current = null
-    if (sender && navRef.current) {
-      // Small delay so the navigator has mounted
-      setTimeout(() => {
-        navRef.current.navigate('Chat', { recipientUsername: sender })
-      }, 300)
-    }
-  }
-
-  function handleLogin() {
-    setAuthState('loggedIn')
-    setupPushNotifications()
-    openPendingChat()
-  }
-  function handleLogout() { setAuthState('loggedOut') }
-  function handlePatternSuccess() {
-    setAuthState('loggedIn')
-    setupPushNotifications()
-    openPendingChat()
-  }
+  function handleLogin() { setAuthState('loggedIn'); setupPushNotifications() }
+  function handleLogout() { pendingChatRef.current = null; setAuthState('loggedOut') }
+  function handlePatternSuccess() { setAuthState('loggedIn'); setupPushNotifications() }
   function handlePatternFallback() { setAuthState('locked') }
 
-  return (
-    <NavigationContainer ref={navRef} key={authState}>
-      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0a0a0a' } }}>
-        {authState === 'pattern' ? (
+  // Build initial state so the chat opens immediately after auth, with Chats behind it
+  const pendingSender = pendingChatRef.current
+  const loggedInInitialState = pendingSender ? {
+    index: 1,
+    routes: [
+      { name: 'Chats' },
+      { name: 'Chat', params: { recipientUsername: pendingSender } },
+    ],
+  } : undefined
+
+  if (authState === 'pattern') {
+    return (
+      <NavigationContainer key="pattern">
+        <Stack.Navigator screenOptions={screenOpts}>
           <Stack.Screen name="PatternLogin">
             {() => <PatternLoginScreen onSuccess={handlePatternSuccess} onFallback={handlePatternFallback} />}
           </Stack.Screen>
-        ) : authState === 'locked' ? (
-          <>
-            <Stack.Screen name="Login">
-              {props => <LoginScreen {...props} onLogin={handleLogin} />}
-            </Stack.Screen>
-            <Stack.Screen name="Register">
-              {props => <RegisterScreen {...props} onLogin={handleLogin} />}
-            </Stack.Screen>
-          </>
-        ) : authState === 'loggedIn' ? (
-          <>
-            <Stack.Screen name="Chats" component={ChatsScreen} />
-            <Stack.Screen name="FindUser" component={FindUserScreen} />
-            <Stack.Screen name="Chat" component={ChatScreen} />
-            <Stack.Screen name="Library" component={LibraryScreen} />
-            <Stack.Screen name="Profile">
-              {props => <ProfileScreen {...props} onLogout={handleLogout} />}
-            </Stack.Screen>
-            <Stack.Screen name="SetPattern" component={SetPatternScreen} />
-          </>
-        ) : (
-          <>
-            <Stack.Screen name="Login">
-              {props => <LoginScreen {...props} onLogin={handleLogin} />}
-            </Stack.Screen>
-            <Stack.Screen name="Register">
-              {props => <RegisterScreen {...props} onLogin={handleLogin} />}
-            </Stack.Screen>
-          </>
-        )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    )
+  }
+
+  if (authState === 'locked') {
+    return (
+      <NavigationContainer key="locked">
+        <Stack.Navigator screenOptions={screenOpts}>
+          <Stack.Screen name="Login">
+            {props => <LoginScreen {...props} onLogin={handleLogin} />}
+          </Stack.Screen>
+          <Stack.Screen name="Register">
+            {props => <RegisterScreen {...props} onLogin={handleLogin} />}
+          </Stack.Screen>
+        </Stack.Navigator>
+      </NavigationContainer>
+    )
+  }
+
+  if (authState === 'loggedIn') {
+    return (
+      <NavigationContainer key="loggedIn" initialState={loggedInInitialState}>
+        <Stack.Navigator screenOptions={screenOpts}>
+          <Stack.Screen name="Chats" component={ChatsScreen} />
+          <Stack.Screen name="FindUser" component={FindUserScreen} />
+          <Stack.Screen name="Chat" component={ChatScreen} />
+          <Stack.Screen name="Library" component={LibraryScreen} />
+          <Stack.Screen name="Profile">
+            {props => <ProfileScreen {...props} onLogout={handleLogout} />}
+          </Stack.Screen>
+          <Stack.Screen name="SetPattern" component={SetPatternScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    )
+  }
+
+  // loggedOut
+  return (
+    <NavigationContainer key="loggedOut">
+      <Stack.Navigator screenOptions={screenOpts}>
+        <Stack.Screen name="Login">
+          {props => <LoginScreen {...props} onLogin={handleLogin} />}
+        </Stack.Screen>
+        <Stack.Screen name="Register">
+          {props => <RegisterScreen {...props} onLogin={handleLogin} />}
+        </Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>
   )
