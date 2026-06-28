@@ -26,7 +26,8 @@ export default function ChatScreen({ route, navigation }) {
   const [saveRequest, setSaveRequest] = useState(null)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const pendingSaves = useRef({})
-  const listRef = useRef(null)
+  const listRef  = useRef(null)
+  const inputRef = useRef(null)
   const recipientPublicKeyRef = useRef(recipientPublicKey)
 
   const CACHE_KEY = `blink_chat_${recipientUsername}`
@@ -41,7 +42,10 @@ export default function ChatScreen({ route, navigation }) {
       if (cached) {
         const msgs = JSON.parse(cached)
         setMessages(msgs)
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 100)
+        setTimeout(() => {
+          listRef.current?.scrollToEnd({ animated: false })
+          inputRef.current?.focus()
+        }, 150)
       }
     }).catch(() => {})
     api.get(`/users/${recipientUsername}`)
@@ -403,6 +407,7 @@ export default function ChatScreen({ route, navigation }) {
           <Text style={styles.iconText}>📎</Text>
         </TouchableOpacity>
         <TextInput
+          ref={inputRef}
           style={styles.input}
           value={text}
           onChangeText={setText}
@@ -411,6 +416,7 @@ export default function ChatScreen({ route, navigation }) {
           onSubmitEditing={sendText}
           returnKeyType="send"
           multiline
+          autoFocus
         />
         <TouchableOpacity onPress={sendText} style={styles.sendBtn}>
           <Text style={styles.sendText}>Send</Text>
