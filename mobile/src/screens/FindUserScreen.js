@@ -21,6 +21,9 @@ export default function FindUserScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <Text style={styles.backText}>←</Text>
+      </TouchableOpacity>
       <Text style={styles.title}>Let's Chat!</Text>
       <Text style={styles.subtitle}>Enter the username of who you want to chat with</Text>
       <TextInput style={styles.input} placeholder="Username" placeholderTextColor="#555"
@@ -34,7 +37,9 @@ export default function FindUserScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container:  { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#0a0a0a' },
+  container:  { flex: 1, padding: 24, backgroundColor: '#0a0a0a', paddingTop: 60 },
+  backBtn:    { marginBottom: 24 },
+  backText:   { color: '#4f6ef7', fontSize: 22 },
   title:      { fontSize: 24, fontWeight: '700', color: '#fff', marginBottom: 8 },
   subtitle:   { fontSize: 14, color: '#666', marginBottom: 32 },
   input:      { backgroundColor: '#1a1a1a', color: '#fff', borderRadius: 10, padding: 14, marginBottom: 12, fontSize: 15 },
