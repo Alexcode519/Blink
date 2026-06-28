@@ -47,8 +47,12 @@ export default function ProfileScreen({ navigation, onLogout }) {
     const base64 = asset.base64 ?? await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
     await RNFS.writeFile(AVATAR_PATH, base64, 'base64')
     setAvatarUri(`file://${AVATAR_PATH}?t=${Date.now()}`)
-    // Sync to backend so other users can see it
-    api.post('/users/me/avatar', { avatar: base64 }).catch(() => {})
+    try {
+      await api.post('/users/me/avatar', { avatar: base64 })
+      Alert.alert('Profile photo updated', 'Your photo is now visible to others.')
+    } catch (e) {
+      Alert.alert('Upload failed', e.message)
+    }
   }
 
   async function saveUsername() {

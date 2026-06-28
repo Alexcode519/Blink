@@ -31,9 +31,16 @@ export async function userRoutes(app) {
   })
 
   // Upload own avatar (base64)
-  app.post('/users/me/avatar', async (req) => {
-    const { avatar } = req.body
-    await pool.query('UPDATE users SET avatar = $1 WHERE id = $2', [avatar, req.user.userId])
+  app.post('/users/me/avatar', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['avatar'],
+        properties: { avatar: { type: 'string' } },
+      },
+    },
+  }, async (req) => {
+    await pool.query('UPDATE users SET avatar = $1 WHERE id = $2', [req.body.avatar, req.user.userId])
     return { ok: true }
   })
 
