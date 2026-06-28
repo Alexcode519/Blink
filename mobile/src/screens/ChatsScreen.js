@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react'
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image } from 'react-native'
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import Svg, { Path, Line, Circle } from 'react-native-svg'
 import RNFS from 'react-native-fs'
@@ -43,6 +43,22 @@ export default function ChatsScreen({ navigation }) {
     })
   }, []))
 
+  function deleteConversation(username) {
+    Alert.alert('Delete chat', `Delete all messages with ${username}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await api.delete(`/messages/conversation/${username}`)
+            setConversations(prev => prev.filter(c => c.other_username !== username))
+          } catch (err) {
+            Alert.alert('Error', err.message)
+          }
+        }
+      },
+    ])
+  }
+
   function renderItem({ item }) {
     return (
       <TouchableOpacity
@@ -51,6 +67,7 @@ export default function ChatsScreen({ navigation }) {
           recipientUsername: item.other_username,
           recipientPublicKey: item.other_public_key,
         })}
+        onLongPress={() => deleteConversation(item.other_username)}
       >
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{item.other_username[0].toUpperCase()}</Text>
