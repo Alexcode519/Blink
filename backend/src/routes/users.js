@@ -21,8 +21,8 @@ export async function userRoutes(app) {
     }
   })
 
-  // Upload own avatar (base64) — must be before /users/:username wildcard
-  app.post('/users/me/avatar', {
+  // Upload own avatar (base64)
+  app.post('/profile/avatar', {
     schema: {
       body: {
         type: 'object',

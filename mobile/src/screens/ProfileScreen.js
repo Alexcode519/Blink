@@ -48,7 +48,7 @@ export default function ProfileScreen({ navigation, onLogout }) {
     await RNFS.writeFile(AVATAR_PATH, base64, 'base64')
     setAvatarUri(`file://${AVATAR_PATH}?t=${Date.now()}`)
     try {
-      await api.post('/users/me/avatar', { avatar: base64 })
+      await api.post('/profile/avatar', { avatar: base64 })
       Alert.alert('Profile photo updated', 'Your photo is now visible to others.')
     } catch (e) {
       Alert.alert('Upload failed', e.message)
