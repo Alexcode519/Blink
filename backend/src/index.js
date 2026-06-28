@@ -40,6 +40,7 @@ await app.register(messageRoutes)
 
 app.get('/', (req, reply) => reply.type('text/html').send(landingPage))
 app.get('/health', () => ({ ok: true }))
+app.get('/version', () => ({ version: 'v2' }))
 
 const port = Number(process.env.PORT ?? 3000)
 await app.listen({ port, host: '0.0.0.0' })
