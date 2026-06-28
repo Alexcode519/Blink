@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
   avatarThumb:      { width: 28, height: 28, borderRadius: 14, marginLeft: 6 },
   avatarPlaceholder:{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
   avatarInitial:    { color: '#fff', fontSize: 12, fontWeight: '700' },
-  bubble:        { maxWidth: '75%', borderRadius: 16, padding: 10 },
+  bubble:        { maxWidth: '88%', borderRadius: 16, padding: 10 },
   mine:          { backgroundColor: '#4f6ef7' },
   theirs:        { backgroundColor: '#1f1f1f' },
   bubbleText:    { color: '#fff', fontSize: 15, lineHeight: 20 },
