@@ -12,40 +12,43 @@ async function ensureChannel() {
 }
 
 export async function setupPushNotifications() {
-  await ensureChannel()
+  try {
+    await ensureChannel()
 
-  // Request permission (required on iOS and Android 13+)
-  await notifee.requestPermission()
-  const authStatus = await messaging().requestPermission()
-  const enabled =
-    authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-    authStatus === messaging.AuthorizationStatus.PROVISIONAL
+    await notifee.requestPermission()
+    const authStatus = await messaging().requestPermission()
+    const enabled =
+      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+      authStatus === messaging.AuthorizationStatus.PROVISIONAL
 
-  if (!enabled) return
+    console.log('Push permission enabled:', enabled, 'status:', authStatus)
+    if (!enabled) return
 
-  // Get FCM token and register with backend
-  const fcmToken = await messaging().getToken()
-  if (fcmToken) {
-    try { await api.post('/users/fcm-token', { fcmToken }) } catch {}
-  }
+    const fcmToken = await messaging().getToken()
+    console.log('FCM token:', fcmToken ? fcmToken.substring(0, 20) + '...' : 'NONE')
+    if (fcmToken) {
+      try {
+        await api.post('/users/fcm-token', { fcmToken })
+        console.log('FCM token saved to backend OK')
+      } catch (e) {
+        console.warn('FCM save failed:', e.message)
+      }
+    }
 
-  // Re-register if token rotates
-  messaging().onTokenRefresh(async (newToken) => {
-    try { await api.post('/users/fcm-token', { fcmToken: newToken }) } catch {}
-  })
-
-  // Foreground: show a proper heads-up notification banner (data-only messages)
-  messaging().onMessage(async (remoteMessage) => {
-    const title = remoteMessage.data?.title ?? remoteMessage.notification?.title ?? 'Blink'
-    const body  = remoteMessage.data?.body  ?? remoteMessage.notification?.body  ?? 'New message'
-    await notifee.displayNotification({
-      title,
-      body,
-      android: {
-        channelId: 'blink_messages',
-        importance: AndroidImportance.HIGH,
-        pressAction: { id: 'default' },
-      },
+    messaging().onTokenRefresh(async (t) => {
+      try { await api.post('/users/fcm-token', { fcmToken: t }) } catch {}
     })
-  })
+
+    messaging().onMessage(async (remoteMessage) => {
+      const title = remoteMessage.data?.title ?? remoteMessage.notification?.title ?? 'Blink'
+      const body  = remoteMessage.data?.body  ?? remoteMessage.notification?.body  ?? 'New message'
+      await notifee.displayNotification({
+        title,
+        body,
+        android: { channelId: 'blink_messages', importance: AndroidImportance.HIGH, pressAction: { id: 'default' } },
+      })
+    })
+  } catch (e) {
+    console.warn('setupPushNotifications error:', e.message)
+  }
 }
