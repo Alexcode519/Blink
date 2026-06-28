@@ -21,16 +21,7 @@ export async function userRoutes(app) {
     }
   })
 
-  app.get('/users/:username', async (req, reply) => {
-    const { rows } = await pool.query(
-      'SELECT username, public_key, avatar FROM users WHERE username = $1',
-      [req.params.username.toLowerCase()]
-    )
-    if (!rows.length) return reply.code(404).send({ error: 'User not found' })
-    return { username: rows[0].username, publicKey: rows[0].public_key, avatar: rows[0].avatar ?? null }
-  })
-
-  // Upload own avatar (base64)
+  // Upload own avatar (base64) — must be before /users/:username wildcard
   app.post('/users/me/avatar', {
     schema: {
       body: {
@@ -42,6 +33,15 @@ export async function userRoutes(app) {
   }, async (req) => {
     await pool.query('UPDATE users SET avatar = $1 WHERE id = $2', [req.body.avatar, req.user.userId])
     return { ok: true }
+  })
+
+  app.get('/users/:username', async (req, reply) => {
+    const { rows } = await pool.query(
+      'SELECT username, public_key, avatar FROM users WHERE username = $1',
+      [req.params.username.toLowerCase()]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'User not found' })
+    return { username: rows[0].username, publicKey: rows[0].public_key, avatar: rows[0].avatar ?? null }
   })
 
   app.post('/users/fcm-token', {
