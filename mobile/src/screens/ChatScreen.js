@@ -249,6 +249,8 @@ export default function ChatScreen({ route, navigation }) {
     }
     const result = await launchCamera({ mediaType: 'photo', includeBase64: true, quality: 0.7, saveToPhotos: false })
     if (result.didCancel || !result.assets?.[0]) return
+    // Brief pause so the app fully resumes before accessing Keychain
+    await new Promise(r => setTimeout(r, 500))
     const asset = result.assets[0]
     const base64 = asset.base64 ?? await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
     await sendPayload(base64, 'image', asset.fileName ?? 'photo')
