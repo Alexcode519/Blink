@@ -9,6 +9,7 @@ import ChatsScreen from '../screens/ChatsScreen'
 import FindUserScreen from '../screens/FindUserScreen'
 import ChatScreen from '../screens/ChatScreen'
 import LibraryScreen from '../screens/LibraryScreen'
+import ProfileScreen from '../screens/ProfileScreen'
 
 const Stack = createNativeStackNavigator()
 
@@ -33,6 +34,9 @@ export default function AppNavigator() {
             <Stack.Screen name="FindUser" component={FindUserScreen} />
             <Stack.Screen name="Chat" component={ChatScreen} />
             <Stack.Screen name="Library" component={LibraryScreen} />
+            <Stack.Screen name="Profile">
+              {props => <ProfileScreen {...props} onLogout={() => setIsLoggedIn(false)} />}
+            </Stack.Screen>
           </>
         ) : (
           <>

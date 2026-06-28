@@ -1,8 +1,11 @@
 import React, { useState, useCallback } from 'react'
-import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
-import Svg, { Path, Line } from 'react-native-svg'
+import Svg, { Path, Line, Circle } from 'react-native-svg'
+import RNFS from 'react-native-fs'
 import { api } from '../api/client'
+
+const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 
 function FeatherIcon() {
   return (
@@ -14,15 +17,30 @@ function FeatherIcon() {
   )
 }
 
+function PersonIcon() {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="8" r="4" stroke="#888" strokeWidth="1.8" />
+      <Path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#888" strokeWidth="1.8" strokeLinecap="round" />
+    </Svg>
+  )
+}
+
 export default function ChatsScreen({ navigation }) {
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
+  const [avatarUri, setAvatarUri] = useState(null)
 
   useFocusEffect(useCallback(() => {
     api.get('/messages/conversations')
       .then(({ conversations: c }) => setConversations(c))
       .catch(() => {})
       .finally(() => setLoading(false))
+
+    RNFS.exists(AVATAR_PATH).then(exists => {
+      if (exists) setAvatarUri(`file://${AVATAR_PATH}?t=${Date.now()}`)
+      else setAvatarUri(null)
+    })
   }, []))
 
   function renderItem({ item }) {
@@ -45,7 +63,16 @@ export default function ChatsScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
+        <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.iconBtn}>
+          {avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={styles.profileThumb} />
+          ) : (
+            <PersonIcon />
+          )}
+        </TouchableOpacity>
+
         <Text style={styles.title}>Blink</Text>
+
         <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
           <FeatherIcon />
         </TouchableOpacity>
@@ -72,15 +99,16 @@ export default function ChatsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container:   { flex: 1, backgroundColor: '#0a0a0a' },
-  topRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 8 },
-  title:       { fontSize: 28, fontWeight: '700', color: '#fff' },
-  iconBtn:     { padding: 4 },
-  newChat:     { marginHorizontal: 16, marginVertical: 12, backgroundColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center' },
-  newChatText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  row:         { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#1a1a1a', gap: 14 },
-  avatar:      { width: 44, height: 44, borderRadius: 22, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center' },
-  avatarText:  { color: '#fff', fontSize: 18, fontWeight: '700' },
-  username:    { color: '#fff', fontSize: 16, fontWeight: '500' },
-  hint:        { color: '#555', textAlign: 'center', marginTop: 60, fontSize: 15 },
+  container:    { flex: 1, backgroundColor: '#0a0a0a' },
+  topRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 8 },
+  title:        { fontSize: 28, fontWeight: '700', color: '#fff' },
+  iconBtn:      { padding: 4 },
+  profileThumb: { width: 28, height: 28, borderRadius: 14 },
+  newChat:      { marginHorizontal: 16, marginVertical: 12, backgroundColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center' },
+  newChatText:  { color: '#fff', fontWeight: '600', fontSize: 15 },
+  row:          { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#1a1a1a', gap: 14 },
+  avatar:       { width: 44, height: 44, borderRadius: 22, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center' },
+  avatarText:   { color: '#fff', fontSize: 18, fontWeight: '700' },
+  username:     { color: '#fff', fontSize: 16, fontWeight: '500' },
+  hint:         { color: '#555', textAlign: 'center', marginTop: 60, fontSize: 15 },
 })
