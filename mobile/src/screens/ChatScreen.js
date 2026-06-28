@@ -27,12 +27,21 @@ export default function ChatScreen({ route, navigation }) {
   const listRef = useRef(null)
   const recipientPublicKeyRef = useRef(recipientPublicKey)
 
+  const CACHE_KEY = `blink_chat_${recipientUsername}`
+
   useEffect(() => {
     AsyncStorage.getItem('username').then(u => setMyUsername(u ?? ''))
     RNFS.exists(AVATAR_PATH).then(exists => {
       if (exists) setMyAvatar(`file://${AVATAR_PATH}?t=${Date.now()}`)
     })
-    // Fetch latest public key, then load history, then start polling
+    // Load local cache instantly, then fetch fresh from server
+    AsyncStorage.getItem(CACHE_KEY).then(cached => {
+      if (cached) {
+        const msgs = JSON.parse(cached)
+        setMessages(msgs)
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 100)
+      }
+    }).catch(() => {})
     api.get(`/users/${recipientUsername}`)
       .then(({ publicKey }) => { if (publicKey) recipientPublicKeyRef.current = publicKey })
       .catch(() => {})
@@ -70,28 +79,44 @@ export default function ChatScreen({ route, navigation }) {
     return () => clearInterval(timer)
   }, [saveRequest])
 
+  const saveCache = useCallback((msgs) => {
+    // Don't cache binary payloads (images/video) — too large
+    const cacheable = msgs.map(m =>
+      (m.contentType === 'image' || m.contentType === 'video')
+        ? { ...m, payload: '__media__' }
+        : m
+    )
+    AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheable)).catch(() => {})
+  }, [CACHE_KEY])
+
   const loadHistory = useCallback(async () => {
     try {
+      const myUser = await AsyncStorage.getItem('username')
       const { messages: history } = await api.get(`/messages/history/${recipientUsername}`)
       if (!history.length) return
       const decoded = await Promise.all(history.map(async (m) => {
-        const isMine = m.senderUsername === (await AsyncStorage.getItem('username'))
+        // Postgres lowercases unquoted aliases: senderUsername → senderusername
+        const sender = m.senderusername ?? m.senderUsername ?? m.sender_username ?? ''
+        const isMine = sender === myUser
         if (isMine) {
           const cached = await AsyncStorage.getItem(`blink_sent_${m.id}`)
-          const { payload, contentType, label } = cached ? JSON.parse(cached) : { payload: '[Sent]', contentType: m.content_type, label: null }
-          return { id: m.id, from: m.senderUsername, payload, contentType, label, mine: true, status: 'delivered' }
+          const { payload, contentType, label } = cached
+            ? JSON.parse(cached)
+            : { payload: '[Sent]', contentType: m.content_type, label: null }
+          return { id: m.id, from: sender, payload, contentType, label, mine: true, status: 'delivered' }
         }
         try {
           const plaintext = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKeyRef.current)
-          return { id: m.id, from: m.senderUsername, payload: plaintext, contentType: m.content_type, mine: false, status: 'delivered' }
+          return { id: m.id, from: sender, payload: plaintext, contentType: m.content_type, mine: false, status: 'delivered' }
         } catch {
-          return { id: m.id, from: m.senderUsername, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered' }
+          return { id: m.id, from: sender, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered' }
         }
       }))
       setMessages(decoded)
+      saveCache(decoded)
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 100)
     } catch {}
-  }, [recipientUsername])
+  }, [recipientUsername, saveCache])
 
   const pollInbox = useCallback(async () => {
     try {
@@ -111,8 +136,10 @@ export default function ChatScreen({ route, navigation }) {
         const existingIds = new Set(prev.map(m => m.id))
         const fresh = decrypted.filter(m => !existingIds.has(m.id))
         if (!fresh.length) return prev
+        const next = [...prev, ...fresh]
+        saveCache(next)
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
-        return [...prev, ...fresh]
+        return next
       })
     } catch {}
   }, [recipientPublicKey])
@@ -123,10 +150,12 @@ export default function ChatScreen({ route, navigation }) {
       const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType })
       const id = messageId ?? Date.now().toString()
       const msg = { id, from: myUsername, payload, contentType, label, mine: true, status: 'sent' }
-      // Cache sent message locally so it survives re-open
-      const cacheKey = `blink_sent_${id}`
-      AsyncStorage.setItem(cacheKey, JSON.stringify({ payload, contentType, label }))
-      setMessages(prev => [...prev, msg])
+      AsyncStorage.setItem(`blink_sent_${id}`, JSON.stringify({ payload, contentType, label })).catch(() => {})
+      setMessages(prev => {
+        const next = [...prev, msg]
+        saveCache(next)
+        return next
+      })
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
     } catch (err) {
       Alert.alert('Error', err.message)
