@@ -40,7 +40,7 @@ export default function RegisterScreen({ navigation, onLogin }) {
     <View style={styles.container}>
       <View style={styles.logoWrap}>
         <View style={styles.logoCircle}>
-          <Icon name="eye" size={36} color="#4f6ef7" />
+          <Icon name="feather" size={36} color="#4f6ef7" />
         </View>
         <Text style={styles.title}>Blink</Text>
       </View>
