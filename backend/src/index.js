@@ -9,6 +9,7 @@ import { messageRoutes } from './routes/messages.js'
 
 const app = Fastify({
   logger: true,
+  bodyLimit: 20 * 1024 * 1024, // 20MB to handle photo/video base64
   schemaErrorFormatter: (errors) => {
     const first = errors[0]
     const field = first.instancePath?.replace('/', '') || first.params?.missingProperty || 'field'

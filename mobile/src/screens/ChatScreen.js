@@ -247,7 +247,7 @@ export default function ChatScreen({ route, navigation }) {
         return
       }
     }
-    const result = await launchCamera({ mediaType: 'photo', includeBase64: true, quality: 0.7, saveToPhotos: false })
+    const result = await launchCamera({ mediaType: 'photo', includeBase64: true, quality: 0.4, maxWidth: 1280, maxHeight: 1280, saveToPhotos: false })
     if (result.didCancel || !result.assets?.[0]) return
     // Brief pause so the app fully resumes before accessing Keychain
     await new Promise(r => setTimeout(r, 500))
@@ -258,7 +258,7 @@ export default function ChatScreen({ route, navigation }) {
 
   async function pickPhoto() {
     setShowAttachMenu(false)
-    const result = await launchImageLibrary({ mediaType: 'photo', includeBase64: true, quality: 0.7 })
+    const result = await launchImageLibrary({ mediaType: 'photo', includeBase64: true, quality: 0.4, maxWidth: 1280, maxHeight: 1280 })
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
     const base64 = asset.base64 ?? await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
