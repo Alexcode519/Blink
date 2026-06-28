@@ -10,7 +10,13 @@ export default function RegisterScreen({ navigation, onLogin }) {
   const [loading, setLoading] = useState(false)
 
   async function handleRegister() {
-    if (!username.trim() || !password.trim()) return
+    const u = username.trim()
+    const p = password.trim()
+    if (!u) return Alert.alert('Error', 'Please enter a username')
+    if (u.length < 3) return Alert.alert('Error', 'Username must be at least 3 characters')
+    if (!/^[a-zA-Z0-9_]+$/.test(u)) return Alert.alert('Error', 'Username can only contain letters, numbers and underscores')
+    if (!p) return Alert.alert('Error', 'Please enter a password')
+    if (p.length < 8) return Alert.alert('Error', 'Password must be at least 8 characters')
     setLoading(true)
     try {
       const { publicKey } = await generateAndStoreKeyPair()
