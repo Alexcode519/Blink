@@ -32,11 +32,13 @@ export default function ChatScreen({ route, navigation }) {
     RNFS.exists(AVATAR_PATH).then(exists => {
       if (exists) setMyAvatar(`file://${AVATAR_PATH}?t=${Date.now()}`)
     })
-    // Fetch latest public key first, then start polling
+    // Fetch latest public key, load history, then start polling
     api.get(`/users/${recipientUsername}`).then(({ publicKey }) => {
       if (publicKey) recipientPublicKeyRef.current = publicKey
+      return loadHistory()
+    }).catch(() => {}).finally(() => {
       pollInbox()
-    }).catch(() => { pollInbox() })
+    })
     const inboxTimer  = setInterval(pollInbox, POLL_INTERVAL)
     const senderTimer = setInterval(pollSaveRequests, POLL_INTERVAL)
     return () => { clearInterval(inboxTimer); clearInterval(senderTimer) }
@@ -69,6 +71,29 @@ export default function ChatScreen({ route, navigation }) {
     return () => clearInterval(timer)
   }, [saveRequest])
 
+  const loadHistory = useCallback(async () => {
+    try {
+      const { messages: history } = await api.get(`/messages/history/${recipientUsername}`)
+      if (!history.length) return
+      const decoded = await Promise.all(history.map(async (m) => {
+        const isMine = m.senderUsername === (await AsyncStorage.getItem('username'))
+        if (isMine) {
+          const cached = await AsyncStorage.getItem(`blink_sent_${m.id}`)
+          const { payload, contentType, label } = cached ? JSON.parse(cached) : { payload: '[Sent]', contentType: m.content_type, label: null }
+          return { id: m.id, from: m.senderUsername, payload, contentType, label, mine: true, status: 'delivered' }
+        }
+        try {
+          const plaintext = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKeyRef.current)
+          return { id: m.id, from: m.senderUsername, payload: plaintext, contentType: m.content_type, mine: false, status: 'delivered' }
+        } catch {
+          return { id: m.id, from: m.senderUsername, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered' }
+        }
+      }))
+      setMessages(decoded)
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 100)
+    } catch {}
+  }, [recipientUsername])
+
   const pollInbox = useCallback(async () => {
     try {
       const { messages: incoming } = await api.get('/messages/inbox')
@@ -83,8 +108,13 @@ export default function ChatScreen({ route, navigation }) {
           }
         })
       )
-      setMessages(prev => [...prev, ...decrypted])
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
+      setMessages(prev => {
+        const existingIds = new Set(prev.map(m => m.id))
+        const fresh = decrypted.filter(m => !existingIds.has(m.id))
+        if (!fresh.length) return prev
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
+        return [...prev, ...fresh]
+      })
     } catch {}
   }, [recipientPublicKey])
 
@@ -92,7 +122,11 @@ export default function ChatScreen({ route, navigation }) {
     try {
       const { ciphertext, nonce } = await encryptForRecipient(payload, recipientPublicKeyRef.current)
       const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType })
-      const msg = { id: messageId ?? Date.now().toString(), from: myUsername, payload, contentType, label, mine: true, status: 'sent' }
+      const id = messageId ?? Date.now().toString()
+      const msg = { id, from: myUsername, payload, contentType, label, mine: true, status: 'sent' }
+      // Cache sent message locally so it survives re-open
+      const cacheKey = `blink_sent_${id}`
+      AsyncStorage.setItem(cacheKey, JSON.stringify({ payload, contentType, label }))
       setMessages(prev => [...prev, msg])
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
     } catch (err) {

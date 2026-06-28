@@ -78,6 +78,28 @@ export async function messageRoutes(app) {
     return { conversations: rows }
   })
 
+  // Get full message history between current user and another user
+  app.get('/messages/history/:username', async (req, reply) => {
+    const { rows: other } = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [req.params.username.toLowerCase()]
+    )
+    if (!other.length) return reply.code(404).send({ error: 'User not found' })
+    const otherId = other[0].id
+
+    const { rows } = await pool.query(
+      `SELECT m.id, su.username AS senderUsername, m.ciphertext, m.nonce, m.content_type, m.created_at
+       FROM messages m
+       JOIN users su ON su.id = m.sender_id
+       WHERE (m.sender_id = $1 AND m.recipient_id = $2)
+          OR (m.sender_id = $2 AND m.recipient_id = $1)
+       ORDER BY m.created_at ASC
+       LIMIT 200`,
+      [req.user.userId, otherId]
+    )
+    return { messages: rows }
+  })
+
   // Poll for undelivered messages — returns them and marks as delivered
   app.get('/messages/inbox', async (req) => {
     const { rows } = await pool.query(
