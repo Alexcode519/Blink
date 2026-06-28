@@ -36,12 +36,9 @@ export async function sendPushNotification(fcmToken, title, body, data = {}) {
   try {
     await messaging.send({
       token: fcmToken,
-      notification: { title, body },
-      data,
-      android: {
-        priority: 'high',
-        notification: { sound: 'default', channelId: 'blink_messages' },
-      },
+      // Data-only so our handler controls display on both foreground and background
+      data: { title, body, ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) },
+      android: { priority: 'high' },
     })
   } catch (err) {
     console.error('FCM send error:', err.message)

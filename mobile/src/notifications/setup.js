@@ -34,10 +34,10 @@ export async function setupPushNotifications() {
     try { await api.post('/users/fcm-token', { fcmToken: newToken }) } catch {}
   })
 
-  // Foreground: show a proper heads-up notification banner
+  // Foreground: show a proper heads-up notification banner (data-only messages)
   messaging().onMessage(async (remoteMessage) => {
-    const title = remoteMessage.notification?.title ?? 'Blink'
-    const body  = remoteMessage.notification?.body  ?? 'New message'
+    const title = remoteMessage.data?.title ?? remoteMessage.notification?.title ?? 'Blink'
+    const body  = remoteMessage.data?.body  ?? remoteMessage.notification?.body  ?? 'New message'
     await notifee.displayNotification({
       title,
       body,
