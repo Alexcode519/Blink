@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import Icon from 'react-native-vector-icons/Feather'
 import { api } from '../api/client'
 import { generateAndStoreKeyPair } from '../crypto/keys'
 
@@ -37,7 +38,12 @@ export default function RegisterScreen({ navigation, onLogin }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Blink</Text>
+      <View style={styles.logoWrap}>
+        <View style={styles.logoCircle}>
+          <Icon name="eye" size={36} color="#4f6ef7" />
+        </View>
+        <Text style={styles.title}>Blink</Text>
+      </View>
       <Text style={styles.subtitle}>Create your account</Text>
       <TextInput style={styles.input} placeholder="Username" placeholderTextColor="#555"
         autoCapitalize="none" value={username} onChangeText={setUsername} />
@@ -56,7 +62,9 @@ export default function RegisterScreen({ navigation, onLogin }) {
 
 const styles = StyleSheet.create({
   container:  { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#0a0a0a' },
-  title:      { fontSize: 36, fontWeight: '700', color: '#fff', textAlign: 'center', marginBottom: 4 },
+  logoWrap:   { alignItems: 'center', marginBottom: 8 },
+  logoCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#4f6ef715', borderWidth: 1.5, borderColor: '#4f6ef740', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  title:      { fontSize: 36, fontWeight: '700', color: '#fff', textAlign: 'center', letterSpacing: -0.5 },
   subtitle:   { fontSize: 14, color: '#888', textAlign: 'center', marginBottom: 32 },
   input:      { backgroundColor: '#1a1a1a', color: '#fff', borderRadius: 10, padding: 14, marginBottom: 12, fontSize: 15 },
   button:     { backgroundColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 8 },
