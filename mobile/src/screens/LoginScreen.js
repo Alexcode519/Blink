@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import Icon from 'react-native-vector-icons/Feather'
 import { api } from '../api/client'
 
-export default function LoginScreen({ navigation, onLogin }) {
+export default function LoginScreen({ navigation, onLogin, isLocked }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -39,7 +39,7 @@ export default function LoginScreen({ navigation, onLogin }) {
         </View>
         <Text style={styles.title}>Blink</Text>
       </View>
-      <Text style={styles.subtitle}>Welcome back</Text>
+      <Text style={styles.subtitle}>{isLocked ? 'Enter your password to continue' : 'Welcome back'}</Text>
       <TextInput style={styles.input} placeholder="Username" placeholderTextColor="#555"
         autoCapitalize="none" value={username} onChangeText={setUsername} />
       <TextInput style={styles.input} placeholder="Password" placeholderTextColor="#555"
@@ -47,9 +47,11 @@ export default function LoginScreen({ navigation, onLogin }) {
       <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? 'Logging in…' : 'Log In'}</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-        <Text style={styles.link}>Don't have an account? Sign up</Text>
-      </TouchableOpacity>
+      {!isLocked && (
+        <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+          <Text style={styles.link}>Don't have an account? Sign up</Text>
+        </TouchableOpacity>
+      )}
     </View>
   )
 }

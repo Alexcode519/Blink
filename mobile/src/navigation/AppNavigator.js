@@ -77,10 +77,7 @@ export default function AppNavigator() {
       <NavigationContainer key="locked">
         <Stack.Navigator screenOptions={screenOpts}>
           <Stack.Screen name="Login">
-            {props => <LoginScreen {...props} onLogin={handleLogin} />}
-          </Stack.Screen>
-          <Stack.Screen name="Register">
-            {props => <RegisterScreen {...props} onLogin={handleLogin} />}
+            {props => <LoginScreen {...props} onLogin={handleLogin} isLocked />}
           </Stack.Screen>
         </Stack.Navigator>
       </NavigationContainer>
