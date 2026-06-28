@@ -121,8 +121,14 @@ export default function ChatScreen({ route, navigation }) {
           return { id: m.id, from: sender, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered' }
         }
       }))
-      setMessages(decoded)
-      saveCache(decoded)
+      setMessages(prev => {
+        // Keep any pending sent messages not yet in server history
+        const historyIds = new Set(decoded.map(m => m.id))
+        const pendingSent = prev.filter(m => m.mine && !historyIds.has(m.id))
+        const merged = [...decoded, ...pendingSent]
+        saveCache(merged)
+        return merged
+      })
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 100)
     } catch {}
   }, [recipientUsername, saveCache])
@@ -161,34 +167,53 @@ export default function ChatScreen({ route, navigation }) {
   }, [recipientPublicKey])
 
   async function sendPayload(payload, contentType, label) {
+    // Add a temporary message immediately so it appears without waiting for the server
+    const tempId = `temp_${Date.now()}`
+    let displayPayload = payload
+    if (contentType === 'image' || contentType === 'video') {
+      const ext = contentType === 'image' ? 'jpg' : 'mp4'
+      const uri = await saveMediaFile(tempId, payload, ext)
+      if (uri) displayPayload = uri
+    }
+    const tempMsg = { id: tempId, from: myUsername, payload: displayPayload, contentType, label, mine: true, status: 'sending' }
+    setMessages(prev => [...prev, tempMsg])
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
+
     try {
       const { ciphertext, nonce } = await encryptForRecipient(payload, recipientPublicKeyRef.current)
       const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType })
-      const id = messageId ?? Date.now().toString()
-      // For media, save to file so it persists across re-opens
-      let displayPayload = payload
+      const id = messageId ?? tempId
+
+      // Rename local media file to final id
       if (contentType === 'image' || contentType === 'video') {
         const ext = contentType === 'image' ? 'jpg' : 'mp4'
-        const uri = await saveMediaFile(id, payload, ext)
-        if (uri) displayPayload = uri
+        const finalUri = await saveMediaFile(id, payload, ext)
+        if (finalUri) displayPayload = finalUri
       }
-      const msg = { id, from: myUsername, payload: displayPayload, contentType, label, mine: true, status: 'sent' }
+
       AsyncStorage.setItem(`blink_sent_${id}`, JSON.stringify({ payload: displayPayload, contentType, label })).catch(() => {})
+
+      // Replace temp message with confirmed one
       setMessages(prev => {
-        const next = [...prev, msg]
+        const next = prev.map(m => m.id === tempId
+          ? { ...m, id, payload: displayPayload, status: 'sent' }
+          : m
+        )
         saveCache(next)
         return next
       })
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
     } catch (err) {
+      // Remove the temp message on failure
+      setMessages(prev => prev.filter(m => m.id !== tempId))
       Alert.alert('Error', err.message)
     }
   }
 
   async function sendText() {
     if (!text.trim()) return
-    await sendPayload(text.trim(), 'text')
-    setText('')
+    const msg = text.trim()
+    setText('')  // clear immediately so it feels instant
+    await sendPayload(msg, 'text')
   }
 
   async function pickPhoto() {
@@ -240,6 +265,7 @@ export default function ChatScreen({ route, navigation }) {
   }
 
   function StatusTick({ status }) {
+    if (status === 'sending') return <Text style={styles.tick}>○</Text>
     if (status === 'sent') return <Text style={styles.tick}>✓</Text>
     if (status === 'delivered') return <Text style={[styles.tick, styles.tickDelivered]}>✓✓</Text>
     return null
