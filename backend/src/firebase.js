@@ -9,13 +9,26 @@ const serviceAccountPath = join(__dirname, '../firebase-service-account.json')
 
 let messaging = null
 
-if (existsSync(serviceAccountPath)) {
-  const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'))
-  initializeApp({ credential: cert(serviceAccount) })
-  messaging = getMessaging()
-  console.log('Firebase Admin initialized')
-} else {
-  console.warn('firebase-service-account.json not found — push notifications disabled')
+try {
+  let serviceAccount = null
+
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // Prefer env var (used on Railway)
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+  } else if (existsSync(serviceAccountPath)) {
+    // Fallback to local file (used in dev)
+    serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'))
+  }
+
+  if (serviceAccount) {
+    initializeApp({ credential: cert(serviceAccount) })
+    messaging = getMessaging()
+    console.log('Firebase Admin initialized')
+  } else {
+    console.warn('Firebase service account not found — push notifications disabled')
+  }
+} catch (err) {
+  console.error('Firebase init error:', err.message)
 }
 
 export async function sendPushNotification(fcmToken, title, body, data = {}) {
