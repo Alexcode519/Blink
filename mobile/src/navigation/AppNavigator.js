@@ -49,9 +49,14 @@ export default function AppNavigator() {
             {() => <PatternLoginScreen onSuccess={handlePatternSuccess} onFallback={handlePatternFallback} />}
           </Stack.Screen>
         ) : authState === 'locked' ? (
-          <Stack.Screen name="Login">
-            {props => <LoginScreen {...props} onLogin={handleLogin} />}
-          </Stack.Screen>
+          <>
+            <Stack.Screen name="Login">
+              {props => <LoginScreen {...props} onLogin={handleLogin} />}
+            </Stack.Screen>
+            <Stack.Screen name="Register">
+              {props => <RegisterScreen {...props} onLogin={handleLogin} />}
+            </Stack.Screen>
+          </>
         ) : authState === 'loggedIn' ? (
           <>
             <Stack.Screen name="Chats" component={ChatsScreen} />
