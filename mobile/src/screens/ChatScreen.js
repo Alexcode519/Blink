@@ -139,7 +139,7 @@ export default function ChatScreen({ route, navigation }) {
             ? JSON.parse(cached)
             : { payload: '[Sent]', contentType: m.content_type, label: null }
           const status = readSet.has(m.id) ? 'read' : 'delivered'
-          return { id: m.id, from: sender, payload, contentType, label, mine: true, status }
+          return { id: m.id, from: sender, payload, contentType, label, mine: true, status, createdAt: m.created_at }
         }
         try {
           let payload = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKeyRef.current)
@@ -149,9 +149,9 @@ export default function ChatScreen({ route, navigation }) {
             const uri = await saveMediaFile(m.id, payload, ext)
             if (uri) payload = uri
           }
-          return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered' }
+          return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at }
         } catch {
-          return { id: m.id, from: sender, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered' }
+          return { id: m.id, from: sender, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at }
         }
       }))
       setMessages(prev => {
@@ -183,9 +183,9 @@ export default function ChatScreen({ route, navigation }) {
               const uri = await saveMediaFile(m.id, payload, ext)
               if (uri) payload = uri
             }
-            return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered' }
+            return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at }
           } catch {
-            return { id: m.id, from: sender, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered' }
+            return { id: m.id, from: sender, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at }
           }
         })
       )
@@ -210,7 +210,7 @@ export default function ChatScreen({ route, navigation }) {
       const uri = await saveMediaFile(tempId, payload, ext)
       if (uri) displayPayload = uri
     }
-    const tempMsg = { id: tempId, from: myUsername, payload: displayPayload, contentType, label, mine: true, status: 'sending' }
+    const tempMsg = { id: tempId, from: myUsername, payload: displayPayload, contentType, label, mine: true, status: 'sending', createdAt: new Date().toISOString() }
     setMessages(prev => [...prev, tempMsg])
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
 
@@ -317,6 +317,19 @@ export default function ChatScreen({ route, navigation }) {
     }
   }
 
+  function formatTime(iso) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const now = new Date()
+    const isToday = d.toDateString() === now.toDateString()
+    const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1)
+    const isYesterday = d.toDateString() === yesterday.toDateString()
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    if (isToday) return time
+    if (isYesterday) return `Yesterday ${time}`
+    return `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} ${time}`
+  }
+
   function StatusTick({ status }) {
     if (status === 'sending')   return <Text style={styles.tick}>○</Text>
     if (status === 'sent')      return <Text style={styles.tick}>✓</Text>
@@ -376,11 +389,12 @@ export default function ChatScreen({ route, navigation }) {
             )}
           </View>
         </View>
-        {item.mine && (
-          <View style={styles.tickRow}>
-            <StatusTick status={item.status} />
-          </View>
-        )}
+        <View style={[styles.tickRow, !item.mine && styles.tickRowTheirs]}>
+          {!!item.createdAt && (
+            <Text style={styles.timestamp}>{formatTime(item.createdAt)}</Text>
+          )}
+          {item.mine && <StatusTick status={item.status} />}
+        </View>
       </View>
     )
   }
@@ -483,9 +497,11 @@ const styles = StyleSheet.create({
   theirs:        { backgroundColor: '#1f1f1f' },
   bubbleText:    { color: '#fff', fontSize: 15, lineHeight: 20 },
   saveBtn:       { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 },
-  tickRow:       { marginTop: 2, marginRight: 4, alignItems: 'flex-end' },
-  tick:     { color: '#888', fontSize: 13 },
-  tickRead: { color: '#4fc3f7', fontSize: 13 },
+  tickRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 2, marginRight: 4 },
+  tickRowTheirs: { justifyContent: 'flex-start', marginLeft: 4 },
+  timestamp:     { color: '#555', fontSize: 11 },
+  tick:          { color: '#888', fontSize: 13 },
+  tickRead:      { color: '#4fc3f7', fontSize: 13 },
   imagePreview:  { width: 200, height: 200, borderRadius: 10 },
   videoPreview:  { width: 220, height: 160, borderRadius: 10 },
   mediaChip:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
