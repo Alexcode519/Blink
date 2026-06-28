@@ -1,6 +1,9 @@
 import { pool } from '../db/pool.js'
 import { createHash, randomBytes, timingSafeEqual } from 'crypto'
 
+// In-memory typing state: Map<userId, { recipientId, expiresAt }>
+const typingState = new Map()
+
 function hashPassword(password, salt) {
   return createHash('sha256').update(salt + password).digest('hex')
 }
@@ -9,6 +12,13 @@ export async function userRoutes(app) {
   app.addHook('onRequest', async (req, reply) => {
     try { await req.jwtVerify() }
     catch { reply.code(401).send({ error: 'Unauthorized' }) }
+  })
+
+  // Update last_seen on every authenticated request
+  app.addHook('preHandler', async (req) => {
+    if (req.user?.userId) {
+      pool.query('UPDATE users SET last_seen = NOW() WHERE id = $1', [req.user.userId]).catch(() => {})
+    }
   })
 
   app.get('/users/:username', async (req, reply) => {
@@ -101,5 +111,40 @@ export async function userRoutes(app) {
       [`${newSalt}:${newHash}`, req.user.userId]
     )
     return { ok: true }
+  })
+
+  // Set typing indicator (expires after 4s)
+  app.post('/users/typing/:recipientUsername', async (req, reply) => {
+    const { rows } = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [req.params.recipientUsername.toLowerCase()]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'User not found' })
+    typingState.set(req.user.userId, {
+      recipientId: rows[0].id,
+      expiresAt: Date.now() + 4000,
+    })
+    return { ok: true }
+  })
+
+  // Get status of another user (online, last seen, typing)
+  app.get('/users/status/:username', async (req, reply) => {
+    const { rows } = await pool.query(
+      'SELECT id, last_seen FROM users WHERE username = $1',
+      [req.params.username.toLowerCase()]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'User not found' })
+    const other = rows[0]
+    const now = Date.now()
+
+    // Check if they are typing TO the current user
+    const typing = typingState.get(other.id)
+    const isTyping = typing && typing.recipientId === req.user.userId && typing.expiresAt > now
+
+    // Online = last_seen within 60 seconds
+    const lastSeenMs = other.last_seen ? new Date(other.last_seen).getTime() : 0
+    const online = (now - lastSeenMs) < 60000
+
+    return { online, lastSeen: other.last_seen, isTyping: !!isTyping }
   })
 }

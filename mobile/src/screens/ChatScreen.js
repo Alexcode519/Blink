@@ -26,6 +26,8 @@ export default function ChatScreen({ route, navigation }) {
   const [myAvatar, setMyAvatar] = useState(null)
   const [saveRequest, setSaveRequest] = useState(null)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [recipientStatus, setRecipientStatus] = useState(null) // { online, lastSeen, isTyping }
+  const typingTimerRef = useRef(null)
   const pendingSaves = useRef({})
   const listRef  = useRef(null)
   const inputRef = useRef(null)
@@ -60,8 +62,30 @@ export default function ChatScreen({ route, navigation }) {
     const inboxTimer    = setInterval(pollInbox, POLL_INTERVAL)
     const senderTimer   = setInterval(pollSaveRequests, POLL_INTERVAL)
     const receiptTimer  = setInterval(pollReadReceipts, POLL_INTERVAL)
-    return () => { clearInterval(inboxTimer); clearInterval(senderTimer); clearInterval(receiptTimer) }
+    const statusTimer   = setInterval(pollStatus, 2000)
+    pollStatus()
+    return () => {
+      clearInterval(inboxTimer); clearInterval(senderTimer)
+      clearInterval(receiptTimer); clearInterval(statusTimer)
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
+    }
   }, [])
+
+  const pollStatus = useCallback(async () => {
+    try {
+      const status = await api.get(`/users/status/${recipientUsername}`)
+      setRecipientStatus(status)
+    } catch {}
+  }, [recipientUsername])
+
+  function handleTyping(val) {
+    setText(val)
+    if (!val.trim()) return
+    // Debounce: send typing event at most once every 2s
+    if (typingTimerRef.current) return
+    api.post(`/users/typing/${recipientUsername}`, {}).catch(() => {})
+    typingTimerRef.current = setTimeout(() => { typingTimerRef.current = null }, 2000)
+  }
 
   const pollReadReceipts = useCallback(async () => {
     try {
@@ -317,6 +341,18 @@ export default function ChatScreen({ route, navigation }) {
     }
   }
 
+  function formatLastSeen(iso) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const diffMs = Date.now() - d.getTime()
+    const mins = Math.floor(diffMs / 60000)
+    if (mins < 1) return 'just now'
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    return d.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+  }
+
   function formatTime(iso) {
     if (!iso) return ''
     const d = new Date(iso)
@@ -405,7 +441,20 @@ export default function ChatScreen({ route, navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{recipientUsername}</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>{recipientUsername}</Text>
+          {recipientStatus && (
+            <Text style={[styles.headerStatus, recipientStatus.isTyping && styles.headerTyping]}>
+              {recipientStatus.isTyping
+                ? 'typing...'
+                : recipientStatus.online
+                  ? 'online'
+                  : recipientStatus.lastSeen
+                    ? `last seen ${formatLastSeen(recipientStatus.lastSeen)}`
+                    : ''}
+            </Text>
+          )}
+        </View>
         <View style={styles.backBtn} />
       </View>
 
@@ -425,7 +474,7 @@ export default function ChatScreen({ route, navigation }) {
           ref={inputRef}
           style={styles.input}
           value={text}
-          onChangeText={setText}
+          onChangeText={handleTyping}
           placeholder="Message…"
           placeholderTextColor="#555"
           onSubmitEditing={sendText}
@@ -480,8 +529,11 @@ export default function ChatScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container:     { flex: 1, backgroundColor: '#0a0a0a' },
-  header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1f1f1f' },
+  header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1f1f1f' },
+  headerCenter:  { alignItems: 'center', flex: 1 },
   headerTitle:   { color: '#fff', fontSize: 17, fontWeight: '600' },
+  headerStatus:  { color: '#555', fontSize: 12, marginTop: 1 },
+  headerTyping:  { color: '#4f6ef7' },
   backBtn:       { width: 36 },
   backText:      { color: '#4f6ef7', fontSize: 22 },
   mineOuter:        { alignItems: 'flex-end', marginBottom: 6 },
