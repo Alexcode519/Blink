@@ -79,14 +79,17 @@ export default function ChatScreen({ route, navigation }) {
     return () => clearInterval(timer)
   }, [saveRequest])
 
+  const saveMediaFile = useCallback(async (id, base64, ext) => {
+    const path = `${RNFS.CachesDirectoryPath}/blink_media_${id}.${ext}`
+    try {
+      await RNFS.writeFile(path, base64, 'base64')
+      return `file://${path}`
+    } catch { return null }
+  }, [])
+
   const saveCache = useCallback((msgs) => {
-    // Don't cache binary payloads (images/video) — too large
-    const cacheable = msgs.map(m =>
-      (m.contentType === 'image' || m.contentType === 'video')
-        ? { ...m, payload: '__media__' }
-        : m
-    )
-    AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheable)).catch(() => {})
+    // Images/video already converted to file:// paths — safe to store
+    AsyncStorage.setItem(CACHE_KEY, JSON.stringify(msgs)).catch(() => {})
   }, [CACHE_KEY])
 
   const loadHistory = useCallback(async () => {
@@ -106,8 +109,14 @@ export default function ChatScreen({ route, navigation }) {
           return { id: m.id, from: sender, payload, contentType, label, mine: true, status: 'delivered' }
         }
         try {
-          const plaintext = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKeyRef.current)
-          return { id: m.id, from: sender, payload: plaintext, contentType: m.content_type, mine: false, status: 'delivered' }
+          let payload = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKeyRef.current)
+          const ct = m.content_type
+          if (ct === 'image' || ct === 'video') {
+            const ext = ct === 'image' ? 'jpg' : 'mp4'
+            const uri = await saveMediaFile(m.id, payload, ext)
+            if (uri) payload = uri
+          }
+          return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered' }
         } catch {
           return { id: m.id, from: sender, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered' }
         }
@@ -124,11 +133,18 @@ export default function ChatScreen({ route, navigation }) {
       if (!incoming.length) return
       const decrypted = await Promise.all(
         incoming.map(async (m) => {
+          const sender = m.senderusername ?? m.senderUsername ?? ''
           try {
-            const plaintext = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKeyRef.current)
-            return { id: m.id, from: m.senderUsername, payload: plaintext, contentType: m.content_type, mine: false, status: 'delivered' }
+            let payload = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKeyRef.current)
+            const ct = m.content_type
+            if (ct === 'image' || ct === 'video') {
+              const ext = ct === 'image' ? 'jpg' : 'mp4'
+              const uri = await saveMediaFile(m.id, payload, ext)
+              if (uri) payload = uri
+            }
+            return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered' }
           } catch {
-            return { id: m.id, from: m.senderUsername, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered' }
+            return { id: m.id, from: sender, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered' }
           }
         })
       )
@@ -149,8 +165,15 @@ export default function ChatScreen({ route, navigation }) {
       const { ciphertext, nonce } = await encryptForRecipient(payload, recipientPublicKeyRef.current)
       const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType })
       const id = messageId ?? Date.now().toString()
-      const msg = { id, from: myUsername, payload, contentType, label, mine: true, status: 'sent' }
-      AsyncStorage.setItem(`blink_sent_${id}`, JSON.stringify({ payload, contentType, label })).catch(() => {})
+      // For media, save to file so it persists across re-opens
+      let displayPayload = payload
+      if (contentType === 'image' || contentType === 'video') {
+        const ext = contentType === 'image' ? 'jpg' : 'mp4'
+        const uri = await saveMediaFile(id, payload, ext)
+        if (uri) displayPayload = uri
+      }
+      const msg = { id, from: myUsername, payload: displayPayload, contentType, label, mine: true, status: 'sent' }
+      AsyncStorage.setItem(`blink_sent_${id}`, JSON.stringify({ payload: displayPayload, contentType, label })).catch(() => {})
       setMessages(prev => {
         const next = [...prev, msg]
         saveCache(next)
@@ -238,7 +261,11 @@ export default function ChatScreen({ route, navigation }) {
           )}
           <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
             {isImage && (
-              <Image source={{ uri: `data:image/jpeg;base64,${item.payload}` }} style={styles.imagePreview} resizeMode="cover" />
+              <Image
+                source={{ uri: item.payload.startsWith('file://') ? item.payload : `data:image/jpeg;base64,${item.payload}` }}
+                style={styles.imagePreview}
+                resizeMode="cover"
+              />
             )}
             {isVideo && (() => {
               const path = `${RNFS.CachesDirectoryPath}/vid_${item.id}.mp4`
