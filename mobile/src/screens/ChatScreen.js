@@ -207,41 +207,44 @@ export default function ChatScreen({ route, navigation }) {
             ? <Image source={{ uri: myAvatar }} style={styles.avatarThumb} />
             : <View style={styles.avatarPlaceholder}><Text style={styles.avatarInitial}>{myUsername[0]?.toUpperCase()}</Text></View>
         )}
-        <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
-          {isImage && (
-            <Image source={{ uri: `data:image/jpeg;base64,${item.payload}` }} style={styles.imagePreview} resizeMode="cover" />
-          )}
-          {isVideo && (() => {
-            const path = `${RNFS.CachesDirectoryPath}/vid_${item.id}.mp4`
-            // Write to temp file for playback
-            RNFS.writeFile(path, item.payload, 'base64').catch(() => {})
-            return (
-              <Video
-                source={{ uri: `file://${path}` }}
-                style={styles.videoPreview}
-                controls
-                resizeMode="cover"
-                paused
-              />
-            )
-          })()}
-          {isDoc && (
-            <View style={styles.mediaChip}>
-              <Text style={styles.mediaIcon}>📄</Text>
-              <Text style={styles.mediaLabel}>{item.label ?? 'Document'}</Text>
-            </View>
-          )}
-          {!isImage && !isVideo && !isDoc && (
-            <Text style={styles.bubbleText}>{item.payload}</Text>
-          )}
-          <View style={styles.bubbleFooter}>
+        <View style={styles.bubbleCol}>
+          <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
+            {isImage && (
+              <Image source={{ uri: `data:image/jpeg;base64,${item.payload}` }} style={styles.imagePreview} resizeMode="cover" />
+            )}
+            {isVideo && (() => {
+              const path = `${RNFS.CachesDirectoryPath}/vid_${item.id}.mp4`
+              RNFS.writeFile(path, item.payload, 'base64').catch(() => {})
+              return (
+                <Video
+                  source={{ uri: `file://${path}` }}
+                  style={styles.videoPreview}
+                  controls
+                  resizeMode="cover"
+                  paused
+                />
+              )
+            })()}
+            {isDoc && (
+              <View style={styles.mediaChip}>
+                <Text style={styles.mediaIcon}>📄</Text>
+                <Text style={styles.mediaLabel}>{item.label ?? 'Document'}</Text>
+              </View>
+            )}
+            {!isImage && !isVideo && !isDoc && (
+              <Text style={styles.bubbleText}>{item.payload}</Text>
+            )}
             {canSave && (
               <TouchableOpacity onPress={() => requestSave(item)}>
                 <Text style={styles.saveBtn}>⬇ Save</Text>
               </TouchableOpacity>
             )}
-            {item.mine && <StatusTick status={item.status} />}
           </View>
+          {item.mine && (
+            <View style={styles.tickRow}>
+              <StatusTick status={item.status} />
+            </View>
+          )}
         </View>
       </View>
     )
@@ -336,9 +339,10 @@ const styles = StyleSheet.create({
   mine:          { backgroundColor: '#4f6ef7' },
   theirs:        { backgroundColor: '#1f1f1f' },
   bubbleText:    { color: '#fff', fontSize: 15, lineHeight: 20 },
-  bubbleFooter:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
-  saveBtn:       { color: 'rgba(255,255,255,0.6)', fontSize: 11 },
-  tick:          { color: 'rgba(255,255,255,0.5)', fontSize: 11, marginLeft: 4 },
+  bubbleCol:     { flexDirection: 'column', alignItems: 'flex-end' },
+  saveBtn:       { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 },
+  tickRow:       { alignSelf: 'flex-end', marginTop: 2, marginRight: 2 },
+  tick:          { color: 'rgba(255,255,255,0.4)', fontSize: 11 },
   tickDelivered: { color: '#a0c4ff' },
   imagePreview:  { width: 200, height: 200, borderRadius: 10 },
   videoPreview:  { width: 220, height: 160, borderRadius: 10 },
