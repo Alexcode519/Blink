@@ -9,7 +9,7 @@ import { loadIndex, deleteItem } from '../library/storage'
 const COL = 3
 const SIZE = (Dimensions.get('window').width - 4) / COL
 
-export default function LibraryScreen() {
+export default function LibraryScreen({ navigation }) {
   const [items, setItems] = useState([])
   const [preview, setPreview] = useState(null)
 
@@ -49,7 +49,13 @@ export default function LibraryScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Library</Text>
+      <View style={styles.headerRow}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.header}>Library</Text>
+        <View style={{ width: 60 }} />
+      </View>
       {items.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🔒</Text>
@@ -87,7 +93,10 @@ export default function LibraryScreen() {
 
 const styles = StyleSheet.create({
   container:      { flex: 1, backgroundColor: '#0a0a0a' },
-  header:         { color: '#fff', fontSize: 17, fontWeight: '600', textAlign: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1f1f1f' },
+  headerRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1f1f1f' },
+  backBtn:        { width: 60 },
+  backText:       { color: '#4f6ef7', fontSize: 16 },
+  header:         { color: '#fff', fontSize: 17, fontWeight: '600', textAlign: 'center' },
   thumb:          { width: SIZE, height: SIZE },
   fileCell:       { width: SIZE, height: SIZE, backgroundColor: '#1a1a1a', alignItems: 'center', justifyContent: 'center', padding: 8 },
   fileIcon:       { fontSize: 28, marginBottom: 4 },

@@ -13,12 +13,14 @@ import { encryptForRecipient, decryptFromSender } from '../crypto/keys'
 import SaveRequestModal from '../components/SaveRequestModal'
 
 const POLL_INTERVAL = 3000
+const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 
 export default function ChatScreen({ route }) {
   const { recipientUsername, recipientPublicKey } = route.params
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
   const [myUsername, setMyUsername] = useState('')
+  const [myAvatar, setMyAvatar] = useState(null)
   const [saveRequest, setSaveRequest] = useState(null)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const pendingSaves = useRef({})
@@ -26,6 +28,9 @@ export default function ChatScreen({ route }) {
 
   useEffect(() => {
     AsyncStorage.getItem('username').then(u => setMyUsername(u ?? ''))
+    RNFS.exists(AVATAR_PATH).then(exists => {
+      if (exists) setMyAvatar(`file://${AVATAR_PATH}?t=${Date.now()}`)
+    })
     const inboxTimer  = setInterval(pollInbox, POLL_INTERVAL)
     const senderTimer = setInterval(pollSaveRequests, POLL_INTERVAL)
     pollInbox()
@@ -158,6 +163,11 @@ export default function ChatScreen({ route }) {
 
     return (
       <View style={[styles.bubbleWrap, item.mine ? styles.mineWrap : styles.theirsWrap]}>
+        {item.mine && (
+          myAvatar
+            ? <Image source={{ uri: myAvatar }} style={styles.avatarThumb} />
+            : <View style={styles.avatarPlaceholder}><Text style={styles.avatarInitial}>{myUsername[0]?.toUpperCase()}</Text></View>
+        )}
         <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
           {isImage && (
             <Image source={{ uri: `data:image/jpeg;base64,${item.payload}` }} style={styles.imagePreview} resizeMode="cover" />
@@ -271,9 +281,12 @@ const styles = StyleSheet.create({
   container:     { flex: 1, backgroundColor: '#0a0a0a' },
   header:        { paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1f1f1f', alignItems: 'center' },
   headerTitle:   { color: '#fff', fontSize: 17, fontWeight: '600' },
-  bubbleWrap:    { marginBottom: 6 },
-  mineWrap:      { alignItems: 'flex-end' },
-  theirsWrap:    { alignItems: 'flex-start' },
+  bubbleWrap:       { marginBottom: 6, flexDirection: 'row', alignItems: 'flex-end' },
+  mineWrap:         { justifyContent: 'flex-end' },
+  theirsWrap:       { justifyContent: 'flex-start' },
+  avatarThumb:      { width: 28, height: 28, borderRadius: 14, marginLeft: 6 },
+  avatarPlaceholder:{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
+  avatarInitial:    { color: '#fff', fontSize: 12, fontWeight: '700' },
   bubble:        { maxWidth: '75%', borderRadius: 16, padding: 10 },
   mine:          { backgroundColor: '#4f6ef7' },
   theirs:        { backgroundColor: '#1f1f1f' },

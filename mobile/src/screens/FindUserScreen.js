@@ -21,7 +21,7 @@ export default function FindUserScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>New conversation</Text>
+      <Text style={styles.title}>Let's Chat!</Text>
       <Text style={styles.subtitle}>Enter the username of who you want to chat with</Text>
       <TextInput style={styles.input} placeholder="Username" placeholderTextColor="#555"
         autoCapitalize="none" autoFocus value={username} onChangeText={setUsername}

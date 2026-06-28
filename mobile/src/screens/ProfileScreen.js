@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Alert, ScrollView, Image, ActivityIndicator,
+  Alert, ScrollView, Image, ActivityIndicator, Switch,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary } from 'react-native-image-picker'
@@ -19,6 +19,7 @@ export default function ProfileScreen({ navigation, onLogout }) {
   const [avatarUri, setAvatarUri]         = useState(null)
   const [joinedDate, setJoinedDate]       = useState('')
   const [loading, setLoading]             = useState(false)
+  const [patternEnabled, setPatternEnabled] = useState(false)
 
   useEffect(() => {
     AsyncStorage.getItem('username').then(u => {
@@ -26,6 +27,7 @@ export default function ProfileScreen({ navigation, onLogout }) {
       setNewUsername(u ?? '')
     })
     loadAvatar()
+    AsyncStorage.getItem('blink_pattern_enabled').then(v => setPatternEnabled(v === 'true'))
     api.get('/users/me/profile').then(p => {
       if (p.created_at) {
         setJoinedDate(new Date(p.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))
@@ -89,14 +91,15 @@ export default function ProfileScreen({ navigation, onLogout }) {
     }
   }
 
-  async function handleLogout() {
+  function handleLogout() {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Log out', style: 'destructive', onPress: async () => {
-          await AsyncStorage.multiRemove(['token', 'username'])
-          onLogout()
-        }
+        text: 'Log out', style: 'destructive', onPress: () => {
+          AsyncStorage.clear().then(() => {
+            onLogout()
+          })
+        },
       },
     ])
   }
@@ -105,6 +108,11 @@ export default function ProfileScreen({ navigation, onLogout }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+
+      {/* Back button */}
+      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <Text style={styles.backText}>← Back</Text>
+      </TouchableOpacity>
 
       {/* Avatar */}
       <TouchableOpacity style={styles.avatarWrap} onPress={pickAvatar}>
@@ -158,6 +166,42 @@ export default function ProfileScreen({ navigation, onLogout }) {
 
       {loading && <ActivityIndicator color="#4f6ef7" style={{ marginTop: 8 }} />}
 
+      {/* Pattern lock section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Security</Text>
+        <View style={styles.settingRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingLabel}>Pattern Login</Text>
+            <Text style={styles.settingHint}>Unlock with a drawn pattern instead of password</Text>
+          </View>
+          <Switch
+            value={patternEnabled}
+            onValueChange={async (val) => {
+              if (val) {
+                navigation.navigate('SetPattern')
+                // Listen for when they come back
+                const unsub = navigation.addListener('focus', async () => {
+                  const enabled = await AsyncStorage.getItem('blink_pattern_enabled')
+                  setPatternEnabled(enabled === 'true')
+                  unsub()
+                })
+              } else {
+                await AsyncStorage.multiRemove(['blink_pattern', 'blink_pattern_enabled'])
+                setPatternEnabled(false)
+              }
+            }}
+            trackColor={{ false: '#333', true: '#4f6ef7' }}
+            thumbColor="#fff"
+          />
+        </View>
+        {patternEnabled && (
+          <TouchableOpacity style={[styles.btn, { marginTop: 10, backgroundColor: '#1a1a1a' }]}
+            onPress={() => navigation.navigate('SetPattern')}>
+            <Text style={[styles.btnText, { color: '#4f6ef7' }]}>Change Pattern</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
       {/* Logout */}
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutText}>Log Out</Text>
@@ -185,6 +229,11 @@ const styles = StyleSheet.create({
   btn:              { backgroundColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center' },
   btnDisabled:      { backgroundColor: '#2a2a2a' },
   btnText:          { color: '#fff', fontWeight: '600', fontSize: 15 },
+  backBtn:          { marginBottom: 16 },
+  backText:         { color: '#4f6ef7', fontSize: 16 },
+  settingRow:       { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14 },
+  settingLabel:     { color: '#fff', fontSize: 15, fontWeight: '500' },
+  settingHint:      { color: '#555', fontSize: 12, marginTop: 2 },
   logoutBtn:        { borderWidth: 1, borderColor: '#ff4444', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 12 },
   logoutText:       { color: '#ff4444', fontWeight: '600', fontSize: 15 },
 })

@@ -37,6 +37,7 @@ export default function RegisterScreen({ navigation, onLogin }) {
         autoCapitalize="none" value={username} onChangeText={setUsername} />
       <TextInput style={styles.input} placeholder="Password" placeholderTextColor="#555"
         secureTextEntry value={password} onChangeText={setPassword} />
+      <Text style={styles.hint}>Min. 8 characters. Username: letters, numbers, underscores only.</Text>
       <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? 'Creating…' : 'Create Account'}</Text>
       </TouchableOpacity>
@@ -54,5 +55,6 @@ const styles = StyleSheet.create({
   input:      { backgroundColor: '#1a1a1a', color: '#fff', borderRadius: 10, padding: 14, marginBottom: 12, fontSize: 15 },
   button:     { backgroundColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 8 },
   buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  hint:       { color: '#555', fontSize: 12, marginBottom: 16, marginTop: -4 },
   link:       { color: '#4f6ef7', textAlign: 'center', marginTop: 20, fontSize: 14 },
 })
