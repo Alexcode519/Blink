@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { setupPushNotifications } from '../notifications/setup'
 import RegisterScreen from '../screens/RegisterScreen'
 import LoginScreen from '../screens/LoginScreen'
 import FindUserScreen from '../screens/FindUserScreen'
@@ -14,7 +15,10 @@ export default function AppNavigator() {
   const [isLoggedIn, setIsLoggedIn] = useState(null)
 
   useEffect(() => {
-    AsyncStorage.getItem('token').then(t => setIsLoggedIn(!!t))
+    AsyncStorage.getItem('token').then(t => {
+      setIsLoggedIn(!!t)
+      if (t) setupPushNotifications()
+    })
   }, [])
 
   if (isLoggedIn === null) return null
@@ -31,10 +35,10 @@ export default function AppNavigator() {
         ) : (
           <>
             <Stack.Screen name="Register">
-              {props => <RegisterScreen {...props} onLogin={() => setIsLoggedIn(true)} />}
+              {props => <RegisterScreen {...props} onLogin={() => { setIsLoggedIn(true); setupPushNotifications() }} />}
             </Stack.Screen>
             <Stack.Screen name="Login">
-              {props => <LoginScreen {...props} onLogin={() => setIsLoggedIn(true)} />}
+              {props => <LoginScreen {...props} onLogin={() => { setIsLoggedIn(true); setupPushNotifications() }} />}
             </Stack.Screen>
           </>
         )}

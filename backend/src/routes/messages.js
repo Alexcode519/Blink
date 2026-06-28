@@ -1,4 +1,5 @@
 import { pool } from '../db/pool.js'
+import { sendPushNotification } from '../firebase.js'
 
 export async function messageRoutes(app) {
   app.addHook('onRequest', async (req, reply) => {
@@ -23,20 +24,36 @@ export async function messageRoutes(app) {
   }, async (req, reply) => {
     const { recipientUsername, ciphertext, nonce, contentType } = req.body
     const { rows: recipients } = await pool.query(
-      'SELECT id FROM users WHERE username = $1',
+      'SELECT id, fcm_token FROM users WHERE username = $1',
       [recipientUsername.toLowerCase()]
     )
     if (!recipients.length) return reply.code(404).send({ error: 'Recipient not found' })
 
+    const recipient = recipients[0]
+    const { rows: senders } = await pool.query(
+      'SELECT username FROM users WHERE id = $1',
+      [req.user.userId]
+    )
+
     const { rows } = await pool.query(
       `INSERT INTO messages (sender_id, recipient_id, ciphertext, nonce, content_type)
        VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
-      [req.user.userId, recipients[0].id, ciphertext, nonce, contentType]
+      [req.user.userId, recipient.id, ciphertext, nonce, contentType]
     )
+
+    // Send push notification to recipient if they have a token
+    const typeLabel = contentType === 'text' ? 'message' : contentType
+    await sendPushNotification(
+      recipient.fcm_token,
+      senders[0]?.username ?? 'Someone',
+      contentType === 'text' ? 'Sent you a message' : `Sent you a ${typeLabel}`,
+      { type: 'new_message', senderUsername: senders[0]?.username ?? '' }
+    )
+
     return { messageId: rows[0].id, createdAt: rows[0].created_at }
   })
 
-  // Poll for undelivered messages — returns them and marks as delivered (server deletes after)
+  // Poll for undelivered messages — returns them and marks as delivered
   app.get('/messages/inbox', async (req) => {
     const { rows } = await pool.query(
       `SELECT m.id, u.username AS senderUsername, m.ciphertext, m.nonce, m.content_type, m.created_at
@@ -49,7 +66,6 @@ export async function messageRoutes(app) {
 
     if (rows.length) {
       const ids = rows.map(r => r.id)
-      // Mark delivered — a cleanup job can hard-delete these after a short TTL
       await pool.query(
         'UPDATE messages SET delivered = TRUE WHERE id = ANY($1::uuid[])',
         [ids]
@@ -62,7 +78,7 @@ export async function messageRoutes(app) {
   // Recipient requests permission to save a message
   app.post('/messages/:messageId/save-request', async (req, reply) => {
     const { rows: msgs } = await pool.query(
-      'SELECT id, recipient_id FROM messages WHERE id = $1',
+      'SELECT m.id, m.recipient_id, m.sender_id, u.fcm_token, r.username AS recipientUsername FROM messages m JOIN users u ON u.id = m.sender_id JOIN users r ON r.id = m.recipient_id WHERE m.id = $1',
       [req.params.messageId]
     )
     if (!msgs.length) return reply.code(404).send({ error: 'Message not found' })
@@ -73,6 +89,15 @@ export async function messageRoutes(app) {
        ON CONFLICT DO NOTHING RETURNING id`,
       [req.params.messageId]
     )
+
+    // Notify sender someone wants to save their content
+    await sendPushNotification(
+      msgs[0].fcm_token,
+      'Save request',
+      `${msgs[0].recipientUsername} wants to save something you sent`,
+      { type: 'save_request' }
+    )
+
     return { requestId: rows[0]?.id }
   })
 
@@ -101,12 +126,24 @@ export async function messageRoutes(app) {
   }, async (req, reply) => {
     const { rows } = await pool.query(
       `UPDATE save_requests sr SET status = $1
-       FROM messages m
+       FROM messages m JOIN users u ON u.id = m.recipient_id
        WHERE sr.id = $2 AND sr.message_id = m.id AND m.sender_id = $3
-       RETURNING sr.id`,
+       RETURNING sr.id, u.fcm_token, u.username AS recipientUsername`,
       [req.body.decision, req.params.requestId, req.user.userId]
     )
     if (!rows.length) return reply.code(404).send({ error: 'Request not found' })
+
+    // Notify recipient of the decision
+    const label = req.body.decision === 'approved' ? 'approved ✓' : 'denied'
+    await sendPushNotification(
+      rows[0].fcm_token,
+      'Save request ' + label,
+      req.body.decision === 'approved'
+        ? 'Your save request was approved'
+        : 'Your save request was denied',
+      { type: 'save_decision', decision: req.body.decision }
+    )
+
     return { status: req.body.decision }
   })
 

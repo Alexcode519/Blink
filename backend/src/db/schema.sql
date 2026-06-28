@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
   username    TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   public_key  TEXT NOT NULL,
+  fcm_token   TEXT,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 

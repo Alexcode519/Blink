@@ -16,4 +16,21 @@ export async function userRoutes(app) {
     if (!rows.length) return reply.code(404).send({ error: 'User not found' })
     return { username: rows[0].username, publicKey: rows[0].public_key }
   })
+
+  // Register or update FCM push token for the current user
+  app.post('/users/fcm-token', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['fcmToken'],
+        properties: { fcmToken: { type: 'string' } },
+      },
+    },
+  }, async (req) => {
+    await pool.query(
+      'UPDATE users SET fcm_token = $1 WHERE id = $2',
+      [req.body.fcmToken, req.user.userId]
+    )
+    return { ok: true }
+  })
 }
