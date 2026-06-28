@@ -4,7 +4,7 @@ import {
   StyleSheet, Alert, Platform, Image, Modal, Pressable,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { launchImageLibrary } from 'react-native-image-picker'
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker'
 import RNFS from 'react-native-fs'
 import Video from 'react-native-video'
 import { saveToLibrary } from '../library/storage'
@@ -216,6 +216,15 @@ export default function ChatScreen({ route, navigation }) {
     await sendPayload(msg, 'text')
   }
 
+  async function takePhoto() {
+    setShowAttachMenu(false)
+    const result = await launchCamera({ mediaType: 'photo', includeBase64: true, quality: 0.7, saveToPhotos: false })
+    if (result.didCancel || !result.assets?.[0]) return
+    const asset = result.assets[0]
+    const base64 = asset.base64 ?? await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
+    await sendPayload(base64, 'image', asset.fileName ?? 'photo')
+  }
+
   async function pickPhoto() {
     setShowAttachMenu(false)
     const result = await launchImageLibrary({ mediaType: 'photo', includeBase64: true, quality: 0.7 })
@@ -350,6 +359,9 @@ export default function ChatScreen({ route, navigation }) {
       />
 
       <View style={styles.inputRow}>
+        <TouchableOpacity onPress={takePhoto} style={styles.iconBtn}>
+          <Text style={styles.iconText}>📷</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={styles.iconBtn}>
           <Text style={styles.iconText}>📎</Text>
         </TouchableOpacity>
@@ -372,9 +384,13 @@ export default function ChatScreen({ route, navigation }) {
         <Pressable style={styles.menuOverlay} onPress={() => setShowAttachMenu(false)}>
           <View style={styles.menuSheet}>
             <Text style={styles.menuTitle}>Send attachment</Text>
+            <TouchableOpacity style={styles.menuItem} onPress={takePhoto}>
+              <Text style={styles.menuIcon}>📷</Text>
+              <Text style={styles.menuLabel}>Camera</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={pickPhoto}>
               <Text style={styles.menuIcon}>🖼️</Text>
-              <Text style={styles.menuLabel}>Photo</Text>
+              <Text style={styles.menuLabel}>Photo from gallery</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={pickVideo}>
               <Text style={styles.menuIcon}>🎥</Text>
