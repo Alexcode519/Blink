@@ -11,26 +11,48 @@ async function ensureChannel() {
   })
 }
 
+// Notification ID per sender so opening a chat can cancel it
+export function notifIdForSender(senderUsername) {
+  return `chat_${senderUsername}`
+}
+
+export async function displayMessageNotification(remoteMessage) {
+  try {
+    await ensureChannel()
+    const data   = remoteMessage.data ?? {}
+    const title  = data.title ?? 'Blink'
+    const body   = data.body  ?? 'New message'
+    const sender = data.senderUsername ?? ''
+    await notifee.displayNotification({
+      id: notifIdForSender(sender),
+      title,
+      body,
+      android: {
+        channelId: 'blink_messages',
+        importance: AndroidImportance.HIGH,
+        pressAction: { id: 'default' },
+        smallIcon: 'ic_notification',
+      },
+    })
+  } catch (e) {
+    console.warn('displayMessageNotification error:', e.message)
+  }
+}
+
 export async function setupPushNotifications() {
   try {
     await ensureChannel()
-
     await notifee.requestPermission()
     const authStatus = await messaging().requestPermission()
     const enabled =
       authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
       authStatus === messaging.AuthorizationStatus.PROVISIONAL
 
-    console.log('Push permission enabled:', enabled, 'status:', authStatus)
     if (!enabled) return
 
     const fcmToken = await messaging().getToken()
-    console.log('FCM token:', fcmToken ? fcmToken.substring(0, 20) + '...' : 'NONE')
     if (fcmToken) {
-      try {
-        await api.post('/users/fcm-token', { fcmToken })
-        console.log('FCM token saved to backend OK')
-      } catch (e) {
+      try { await api.post('/users/fcm-token', { fcmToken }) } catch (e) {
         console.warn('FCM save failed:', e.message)
       }
     }
@@ -39,14 +61,9 @@ export async function setupPushNotifications() {
       try { await api.post('/users/fcm-token', { fcmToken: t }) } catch {}
     })
 
+    // Foreground messages
     messaging().onMessage(async (remoteMessage) => {
-      const title = remoteMessage.data?.title ?? remoteMessage.notification?.title ?? 'Blink'
-      const body  = remoteMessage.data?.body  ?? remoteMessage.notification?.body  ?? 'New message'
-      await notifee.displayNotification({
-        title,
-        body,
-        android: { channelId: 'blink_messages', importance: AndroidImportance.HIGH, pressAction: { id: 'default' } },
-      })
+      await displayMessageNotification(remoteMessage)
     })
   } catch (e) {
     console.warn('setupPushNotifications error:', e.message)

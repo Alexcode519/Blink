@@ -11,6 +11,8 @@ import { saveToLibrary } from '../library/storage'
 import { api } from '../api/client'
 import { encryptForRecipient, decryptFromSender } from '../crypto/keys'
 import SaveRequestModal from '../components/SaveRequestModal'
+import notifee from '@notifee/react-native'
+import { notifIdForSender } from '../notifications/setup'
 
 const POLL_INTERVAL = 3000
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
@@ -47,8 +49,9 @@ export default function ChatScreen({ route, navigation }) {
       .catch(() => {})
       .then(() => loadHistory())
       .finally(() => pollInbox())
-    // Mark incoming messages as read
+    // Mark incoming messages as read and dismiss notification
     api.post(`/messages/read/${recipientUsername}`, {}).catch(() => {})
+    notifee.cancelNotification(notifIdForSender(recipientUsername)).catch(() => {})
     const inboxTimer    = setInterval(pollInbox, POLL_INTERVAL)
     const senderTimer   = setInterval(pollSaveRequests, POLL_INTERVAL)
     const receiptTimer  = setInterval(pollReadReceipts, POLL_INTERVAL)

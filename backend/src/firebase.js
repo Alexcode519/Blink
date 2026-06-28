@@ -36,12 +36,13 @@ export async function sendPushNotification(fcmToken, title, body, data = {}) {
   try {
     await messaging.send({
       token: fcmToken,
-      notification: { title, body },
-      data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
-      android: {
-        priority: 'high',
-        notification: { channelId: 'blink_messages', sound: 'default' },
+      // Data-only — Notifee on the device controls display and dismissal
+      data: {
+        title,
+        body,
+        ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
       },
+      android: { priority: 'high' },
     })
   } catch (err) {
     console.error('FCM send error:', err.message)
