@@ -28,7 +28,8 @@ export async function authRoutes(app) {
         'INSERT INTO users (username, password_hash, public_key) VALUES ($1, $2, $3) RETURNING id, username',
         [username.toLowerCase(), `${salt}:${hash}`, publicKey]
       )
-      const token = app.jwt.sign({ userId: rows[0].id, username: rows[0].username })
+      // 30-day expiry
+      const token = app.jwt.sign({ userId: rows[0].id, username: rows[0].username }, { expiresIn: '30d' })
       return { token, username: rows[0].username }
     } catch (err) {
       if (err.code === '23505') return reply.code(409).send({ error: 'Username already taken' })
@@ -58,11 +59,10 @@ export async function authRoutes(app) {
     const [salt, storedHash] = rows[0].password_hash.split(':')
     const attemptHash = hashPassword(password, salt)
 
-    // Constant-time comparison to prevent timing attacks
     const match = timingSafeEqual(Buffer.from(storedHash, 'hex'), Buffer.from(attemptHash, 'hex'))
     if (!match) return reply.code(401).send({ error: 'Invalid credentials' })
 
-    const token = app.jwt.sign({ userId: rows[0].id, username: rows[0].username })
+    const token = app.jwt.sign({ userId: rows[0].id, username: rows[0].username }, { expiresIn: '30d' })
     return { token, username: rows[0].username }
   })
 }

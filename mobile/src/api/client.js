@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-const BASE_URL = 'http://10.0.2.2:3000'
+const BASE_URL = 'https://hydroxide-recopy-identify.ngrok-free.dev'
 
 async function request(method, path, body) {
   const token = await AsyncStorage.getItem('token')
@@ -8,6 +8,7 @@ async function request(method, path, body) {
     method,
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),

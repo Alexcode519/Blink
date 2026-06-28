@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { setupPushNotifications } from '../notifications/setup'
 import RegisterScreen from '../screens/RegisterScreen'
 import LoginScreen from '../screens/LoginScreen'
+import ChatsScreen from '../screens/ChatsScreen'
 import FindUserScreen from '../screens/FindUserScreen'
 import ChatScreen from '../screens/ChatScreen'
 import LibraryScreen from '../screens/LibraryScreen'
@@ -28,6 +29,7 @@ export default function AppNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0a0a0a' } }}>
         {isLoggedIn ? (
           <>
+            <Stack.Screen name="Chats" component={ChatsScreen} />
             <Stack.Screen name="FindUser" component={FindUserScreen} />
             <Stack.Screen name="Chat" component={ChatScreen} />
             <Stack.Screen name="Library" component={LibraryScreen} />

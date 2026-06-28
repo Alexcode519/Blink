@@ -6,6 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary } from 'react-native-image-picker'
 import RNFS from 'react-native-fs'
+import Video from 'react-native-video'
 import { saveToLibrary } from '../library/storage'
 import { api } from '../api/client'
 import { encryptForRecipient, decryptFromSender } from '../crypto/keys'
@@ -18,23 +19,19 @@ export default function ChatScreen({ route }) {
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
   const [myUsername, setMyUsername] = useState('')
-  const [saveRequest, setSaveRequest] = useState(null)   // pending request shown to sender
+  const [saveRequest, setSaveRequest] = useState(null)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
-  // track pending save requests we sent, keyed by messageId → { requestId, payload, contentType, label }
   const pendingSaves = useRef({})
+  const listRef = useRef(null)
 
   useEffect(() => {
     AsyncStorage.getItem('username').then(u => setMyUsername(u ?? ''))
     const inboxTimer  = setInterval(pollInbox, POLL_INTERVAL)
     const senderTimer = setInterval(pollSaveRequests, POLL_INTERVAL)
     pollInbox()
-    return () => {
-      clearInterval(inboxTimer)
-      clearInterval(senderTimer)
-    }
+    return () => { clearInterval(inboxTimer); clearInterval(senderTimer) }
   }, [])
 
-  // Receiver polls their outbox for messages they sent, checks save-request status
   const pollSaveRequests = useCallback(async () => {
     const entries = Object.entries(pendingSaves.current)
     if (!entries.length) return
@@ -52,14 +49,11 @@ export default function ChatScreen({ route }) {
     }
   }, [])
 
-  // Sender polls for pending save requests from recipients
   useEffect(() => {
     const timer = setInterval(async () => {
       try {
         const { requests } = await api.get('/messages/save-requests/pending')
-        if (requests?.length && !saveRequest) {
-          setSaveRequest(requests[0])
-        }
+        if (requests?.length && !saveRequest) setSaveRequest(requests[0])
       } catch {}
     }, POLL_INTERVAL)
     return () => clearInterval(timer)
@@ -73,24 +67,24 @@ export default function ChatScreen({ route }) {
         incoming.map(async (m) => {
           try {
             const plaintext = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKey)
-            return { id: m.id, from: m.senderUsername, payload: plaintext, contentType: m.content_type, mine: false }
+            return { id: m.id, from: m.senderUsername, payload: plaintext, contentType: m.content_type, mine: false, status: 'delivered' }
           } catch {
-            return { id: m.id, from: m.senderUsername, payload: '[Could not decrypt]', contentType: 'text', mine: false }
+            return { id: m.id, from: m.senderUsername, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered' }
           }
         })
       )
       setMessages(prev => [...prev, ...decrypted])
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
     } catch {}
   }, [recipientPublicKey])
 
   async function sendPayload(payload, contentType, label) {
     try {
       const { ciphertext, nonce } = await encryptForRecipient(payload, recipientPublicKey)
-      await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType })
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(), from: myUsername,
-        payload, contentType, label, mine: true,
-      }])
+      const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType })
+      const msg = { id: messageId ?? Date.now().toString(), from: myUsername, payload, contentType, label, mine: true, status: 'sent' }
+      setMessages(prev => [...prev, msg])
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
     } catch (err) {
       Alert.alert('Error', err.message)
     }
@@ -126,9 +120,7 @@ export default function ChatScreen({ route }) {
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
     const base64 = await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
-    const contentType = asset.type?.startsWith('image/') ? 'image'
-      : asset.type?.startsWith('video/') ? 'video'
-      : 'document'
+    const contentType = asset.type?.startsWith('image/') ? 'image' : asset.type?.startsWith('video/') ? 'video' : 'document'
     await sendPayload(base64, contentType, asset.fileName ?? 'file')
   }
 
@@ -136,12 +128,7 @@ export default function ChatScreen({ route }) {
     if (message.contentType === 'text') return
     try {
       const { requestId } = await api.post(`/messages/${message.id}/save-request`, {})
-      pendingSaves.current[message.id] = {
-        requestId,
-        payload: message.payload,
-        contentType: message.contentType,
-        label: message.label,
-      }
+      pendingSaves.current[message.id] = { requestId, payload: message.payload, contentType: message.contentType, label: message.label }
       Alert.alert('Save requested', 'Waiting for the sender to approve.')
     } catch (err) {
       Alert.alert('Error', err.message)
@@ -157,6 +144,12 @@ export default function ChatScreen({ route }) {
     }
   }
 
+  function StatusTick({ status }) {
+    if (status === 'sent') return <Text style={styles.tick}>✓</Text>
+    if (status === 'delivered') return <Text style={[styles.tick, styles.tickDelivered]}>✓✓</Text>
+    return null
+  }
+
   function renderBubble(item) {
     const isImage = item.contentType === 'image'
     const isVideo = item.contentType === 'video'
@@ -164,47 +157,59 @@ export default function ChatScreen({ route }) {
     const canSave = !item.mine && (isImage || isVideo || isDoc)
 
     return (
-      <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
-        {isImage && (
-          <Image
-            source={{ uri: `data:image/jpeg;base64,${item.payload}` }}
-            style={styles.imagePreview}
-            resizeMode="cover"
-          />
-        )}
-        {isVideo && (
-          <View style={styles.mediaChip}>
-            <Text style={styles.mediaIcon}>🎥</Text>
-            <Text style={styles.mediaLabel}>{item.label ?? 'Video'}</Text>
+      <View style={[styles.bubbleWrap, item.mine ? styles.mineWrap : styles.theirsWrap]}>
+        <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
+          {isImage && (
+            <Image source={{ uri: `data:image/jpeg;base64,${item.payload}` }} style={styles.imagePreview} resizeMode="cover" />
+          )}
+          {isVideo && (() => {
+            const path = `${RNFS.CachesDirectoryPath}/vid_${item.id}.mp4`
+            // Write to temp file for playback
+            RNFS.writeFile(path, item.payload, 'base64').catch(() => {})
+            return (
+              <Video
+                source={{ uri: `file://${path}` }}
+                style={styles.videoPreview}
+                controls
+                resizeMode="cover"
+                paused
+              />
+            )
+          })()}
+          {isDoc && (
+            <View style={styles.mediaChip}>
+              <Text style={styles.mediaIcon}>📄</Text>
+              <Text style={styles.mediaLabel}>{item.label ?? 'Document'}</Text>
+            </View>
+          )}
+          {!isImage && !isVideo && !isDoc && (
+            <Text style={styles.bubbleText}>{item.payload}</Text>
+          )}
+          <View style={styles.bubbleFooter}>
+            {canSave && (
+              <TouchableOpacity onPress={() => requestSave(item)}>
+                <Text style={styles.saveBtn}>⬇ Save</Text>
+              </TouchableOpacity>
+            )}
+            {item.mine && <StatusTick status={item.status} />}
           </View>
-        )}
-        {isDoc && (
-          <View style={styles.mediaChip}>
-            <Text style={styles.mediaIcon}>📄</Text>
-            <Text style={styles.mediaLabel}>{item.label ?? 'Document'}</Text>
-          </View>
-        )}
-        {!isImage && !isVideo && !isDoc && (
-          <Text style={styles.bubbleText}>{item.payload}</Text>
-        )}
-        {canSave && (
-          <TouchableOpacity onPress={() => requestSave(item)} style={styles.saveRow}>
-            <Text style={styles.saveBtn}>⬇ Request save</Text>
-          </TouchableOpacity>
-        )}
+        </View>
       </View>
     )
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>{recipientUsername}</Text>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>{recipientUsername}</Text>
+      </View>
 
       <FlatList
+        ref={listRef}
         data={messages}
         keyExtractor={m => m.id}
         renderItem={({ item }) => renderBubble(item)}
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
       />
 
       <View style={styles.inputRow}>
@@ -217,6 +222,9 @@ export default function ChatScreen({ route }) {
           onChangeText={setText}
           placeholder="Message…"
           placeholderTextColor="#555"
+          onSubmitEditing={sendText}
+          returnKeyType="send"
+          multiline
         />
         <TouchableOpacity onPress={sendText} style={styles.sendBtn}>
           <Text style={styles.sendText}>Send</Text>
@@ -250,9 +258,7 @@ export default function ChatScreen({ route }) {
         <SaveRequestModal
           request={saveRequest}
           onDecide={async (decision) => {
-            try {
-              await api.patch(`/messages/save-requests/${saveRequest.id}`, { decision })
-            } catch {}
+            try { await api.patch(`/messages/save-requests/${saveRequest.id}`, { decision }) } catch {}
             setSaveRequest(null)
           }}
         />
@@ -263,23 +269,30 @@ export default function ChatScreen({ route }) {
 
 const styles = StyleSheet.create({
   container:     { flex: 1, backgroundColor: '#0a0a0a' },
-  header:        { color: '#fff', fontSize: 17, fontWeight: '600', textAlign: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1f1f1f' },
-  bubble:        { maxWidth: '75%', borderRadius: 14, padding: 10, marginBottom: 8 },
-  mine:          { backgroundColor: '#4f6ef7', alignSelf: 'flex-end' },
-  theirs:        { backgroundColor: '#1f1f1f', alignSelf: 'flex-start' },
-  bubbleText:    { color: '#fff', fontSize: 15 },
-  saveRow:       { marginTop: 6 },
-  saveBtn:       { color: '#aaa', fontSize: 12 },
+  header:        { paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1f1f1f', alignItems: 'center' },
+  headerTitle:   { color: '#fff', fontSize: 17, fontWeight: '600' },
+  bubbleWrap:    { marginBottom: 6 },
+  mineWrap:      { alignItems: 'flex-end' },
+  theirsWrap:    { alignItems: 'flex-start' },
+  bubble:        { maxWidth: '75%', borderRadius: 16, padding: 10 },
+  mine:          { backgroundColor: '#4f6ef7' },
+  theirs:        { backgroundColor: '#1f1f1f' },
+  bubbleText:    { color: '#fff', fontSize: 15, lineHeight: 20 },
+  bubbleFooter:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  saveBtn:       { color: 'rgba(255,255,255,0.6)', fontSize: 11 },
+  tick:          { color: 'rgba(255,255,255,0.5)', fontSize: 11, marginLeft: 4 },
+  tickDelivered: { color: '#a0c4ff' },
   imagePreview:  { width: 200, height: 200, borderRadius: 10 },
+  videoPreview:  { width: 220, height: 160, borderRadius: 10 },
   mediaChip:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   mediaIcon:     { fontSize: 20 },
   mediaLabel:    { color: '#fff', fontSize: 14, flexShrink: 1 },
-  inputRow:      { flexDirection: 'row', alignItems: 'center', padding: 10, borderTopWidth: 1, borderTopColor: '#1f1f1f' },
-  iconBtn:       { padding: 8 },
+  inputRow:      { flexDirection: 'row', alignItems: 'flex-end', padding: 10, borderTopWidth: 1, borderTopColor: '#1f1f1f' },
+  iconBtn:       { padding: 8, paddingBottom: 10 },
   iconText:      { fontSize: 20 },
-  input:         { flex: 1, backgroundColor: '#1a1a1a', color: '#fff', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, marginHorizontal: 8 },
-  sendBtn:       { paddingHorizontal: 12 },
-  sendText:      { color: '#4f6ef7', fontWeight: '600' },
+  input:         { flex: 1, backgroundColor: '#1a1a1a', color: '#fff', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, marginHorizontal: 8, maxHeight: 100 },
+  sendBtn:       { paddingHorizontal: 8, paddingBottom: 10 },
+  sendText:      { color: '#4f6ef7', fontWeight: '600', fontSize: 15 },
   menuOverlay:   { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   menuSheet:     { backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 },
   menuTitle:     { color: '#888', fontSize: 13, textAlign: 'center', marginBottom: 16 },

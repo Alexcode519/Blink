@@ -53,6 +53,31 @@ export async function messageRoutes(app) {
     return { messageId: rows[0].id, createdAt: rows[0].created_at }
   })
 
+  // Get recent conversations (distinct users this user has chatted with)
+  app.get('/messages/conversations', async (req) => {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (other_user)
+        other_user,
+        other_username,
+        other_public_key,
+        last_at
+       FROM (
+         SELECT
+           CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END AS other_user,
+           CASE WHEN m.sender_id = $1 THEN ru.username ELSE su.username END AS other_username,
+           CASE WHEN m.sender_id = $1 THEN ru.public_key ELSE su.public_key END AS other_public_key,
+           m.created_at AS last_at
+         FROM messages m
+         JOIN users su ON su.id = m.sender_id
+         JOIN users ru ON ru.id = m.recipient_id
+         WHERE m.sender_id = $1 OR m.recipient_id = $1
+       ) t
+       ORDER BY other_user, last_at DESC`,
+      [req.user.userId]
+    )
+    return { conversations: rows }
+  })
+
   // Poll for undelivered messages — returns them and marks as delivered
   app.get('/messages/inbox', async (req) => {
     const { rows } = await pool.query(
