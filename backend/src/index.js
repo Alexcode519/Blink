@@ -4,6 +4,7 @@ import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import rateLimit from '@fastify/rate-limit'
 import { authRoutes } from './routes/auth.js'
+import { landingPage } from './web.js'
 import { userRoutes } from './routes/users.js'
 import { messageRoutes } from './routes/messages.js'
 
@@ -37,6 +38,7 @@ await app.register(authRoutes, { prefix: '/auth', config: { rateLimit: { max: 10
 await app.register(userRoutes)
 await app.register(messageRoutes)
 
+app.get('/', (req, reply) => reply.type('text/html').send(landingPage))
 app.get('/health', () => ({ ok: true }))
 
 const port = Number(process.env.PORT ?? 3000)
