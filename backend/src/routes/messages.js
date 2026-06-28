@@ -194,6 +194,36 @@ export async function messageRoutes(app) {
     return { status: req.body.decision }
   })
 
+  // Recipient marks all messages from a sender as read
+  app.post('/messages/read/:senderUsername', async (req, reply) => {
+    const { rows: sender } = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [req.params.senderUsername.toLowerCase()]
+    )
+    if (!sender.length) return reply.code(404).send({ error: 'User not found' })
+    await pool.query(
+      `UPDATE messages SET read_at = NOW()
+       WHERE sender_id = $1 AND recipient_id = $2 AND read_at IS NULL`,
+      [sender[0].id, req.user.userId]
+    )
+    return { ok: true }
+  })
+
+  // Sender checks which of their sent messages have been read
+  app.get('/messages/read-receipts/:recipientUsername', async (req, reply) => {
+    const { rows: recipient } = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [req.params.recipientUsername.toLowerCase()]
+    )
+    if (!recipient.length) return reply.code(404).send({ error: 'User not found' })
+    const { rows } = await pool.query(
+      `SELECT id FROM messages
+       WHERE sender_id = $1 AND recipient_id = $2 AND read_at IS NOT NULL`,
+      [req.user.userId, recipient[0].id]
+    )
+    return { readIds: rows.map(r => r.id) }
+  })
+
   // Delete all messages between current user and another user (for this user only)
   app.delete('/messages/conversation/:username', async (req, reply) => {
     const { rows: other } = await pool.query(

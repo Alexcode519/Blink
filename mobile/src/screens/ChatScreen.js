@@ -47,10 +47,30 @@ export default function ChatScreen({ route, navigation }) {
       .catch(() => {})
       .then(() => loadHistory())
       .finally(() => pollInbox())
-    const inboxTimer  = setInterval(pollInbox, POLL_INTERVAL)
-    const senderTimer = setInterval(pollSaveRequests, POLL_INTERVAL)
-    return () => { clearInterval(inboxTimer); clearInterval(senderTimer) }
+    // Mark incoming messages as read
+    api.post(`/messages/read/${recipientUsername}`, {}).catch(() => {})
+    const inboxTimer    = setInterval(pollInbox, POLL_INTERVAL)
+    const senderTimer   = setInterval(pollSaveRequests, POLL_INTERVAL)
+    const receiptTimer  = setInterval(pollReadReceipts, POLL_INTERVAL)
+    return () => { clearInterval(inboxTimer); clearInterval(senderTimer); clearInterval(receiptTimer) }
   }, [])
+
+  const pollReadReceipts = useCallback(async () => {
+    try {
+      const { readIds } = await api.get(`/messages/read-receipts/${recipientUsername}`)
+      if (!readIds?.length) return
+      const readSet = new Set(readIds)
+      setMessages(prev => {
+        const updated = prev.map(m =>
+          m.mine && readSet.has(m.id) && m.status !== 'read'
+            ? { ...m, status: 'read' }
+            : m
+        )
+        const changed = updated.some((m, i) => m.status !== prev[i].status)
+        return changed ? updated : prev
+      })
+    } catch {}
+  }, [recipientUsername])
 
   const pollSaveRequests = useCallback(async () => {
     const entries = Object.entries(pendingSaves.current)
@@ -137,6 +157,8 @@ export default function ChatScreen({ route, navigation }) {
     try {
       const { messages: incoming } = await api.get('/messages/inbox')
       if (!incoming.length) return
+      // Mark them read since the screen is open
+      api.post(`/messages/read/${recipientUsername}`, {}).catch(() => {})
       const decrypted = await Promise.all(
         incoming.map(async (m) => {
           const sender = m.senderusername ?? m.senderUsername ?? ''
@@ -274,9 +296,10 @@ export default function ChatScreen({ route, navigation }) {
   }
 
   function StatusTick({ status }) {
-    if (status === 'sending') return <Text style={styles.tick}>○</Text>
-    if (status === 'sent') return <Text style={styles.tick}>✓</Text>
-    if (status === 'delivered') return <Text style={[styles.tick, styles.tickDelivered]}>✓✓</Text>
+    if (status === 'sending')   return <Text style={styles.tick}>○</Text>
+    if (status === 'sent')      return <Text style={styles.tick}>✓</Text>
+    if (status === 'delivered') return <Text style={styles.tick}>✓✓</Text>
+    if (status === 'read')      return <Text style={[styles.tick, styles.tickRead]}>✓✓</Text>
     return null
   }
 
@@ -440,8 +463,8 @@ const styles = StyleSheet.create({
   bubbleText:    { color: '#fff', fontSize: 15, lineHeight: 20 },
   saveBtn:       { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 },
   tickRow:       { marginTop: 2, marginRight: 4 },
-  tick:          { color: 'rgba(255,255,255,0.4)', fontSize: 11 },
-  tickDelivered: { color: '#a0c4ff' },
+  tick:     { color: 'rgba(255,255,255,0.4)', fontSize: 11 },
+  tickRead: { color: '#4fc3f7' },
   imagePreview:  { width: 200, height: 200, borderRadius: 10 },
   videoPreview:  { width: 220, height: 160, borderRadius: 10 },
   mediaChip:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
