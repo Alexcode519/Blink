@@ -281,6 +281,102 @@ export async function messageRoutes(app) {
     return { ok: true }
   })
 
+  // Recipient requests a time extension on a saved library item
+  app.post('/messages/extend-requests', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['libraryItemId', 'senderUsername'],
+        properties: {
+          libraryItemId: { type: 'string' },
+          senderUsername: { type: 'string' },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const { libraryItemId, senderUsername } = req.body
+    const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [senderUsername.toLowerCase()])
+    if (!rows.length) return reply.code(404).send({ error: 'Sender not found' })
+    const senderId = rows[0].id
+    // Check no pending request already
+    const { rows: existing } = await pool.query(
+      `SELECT id FROM extend_requests WHERE library_item_id = $1 AND requester_id = $2 AND status = 'pending'`,
+      [libraryItemId, req.user.userId]
+    )
+    if (existing.length) return reply.code(409).send({ error: 'Request already pending' })
+    const { rows: inserted } = await pool.query(
+      `INSERT INTO extend_requests (library_item_id, requester_id, sender_id) VALUES ($1, $2, $3) RETURNING id`,
+      [libraryItemId, req.user.userId, senderId]
+    )
+    // Notify sender via push
+    const { rows: senderRow } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [senderId])
+    const { rows: requesterRow } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.userId])
+    if (senderRow[0]?.fcm_token) {
+      const { sendPush } = await import('../firebase.js')
+      await sendPush(senderRow[0].fcm_token, `${requesterRow[0].username} wants more time`, 'Time extension request', { type: 'extend_request' }).catch(() => {})
+    }
+    return { id: inserted[0].id }
+  })
+
+  // Sender polls for pending extend requests they need to decide on
+  app.get('/messages/extend-requests/pending', async (req) => {
+    const { rows } = await pool.query(
+      `SELECT er.id, er.library_item_id, u.username AS requester_username
+       FROM extend_requests er
+       JOIN users u ON u.id = er.requester_id
+       WHERE er.sender_id = $1 AND er.status = 'pending'
+       ORDER BY er.created_at ASC`,
+      [req.user.userId]
+    )
+    return { requests: rows }
+  })
+
+  // Sender decides on an extend request
+  app.patch('/messages/extend-requests/:requestId', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['decision'],
+        properties: {
+          decision: { type: 'string', enum: ['approved', 'denied'] },
+          expiresHours: { type: 'number', nullable: true },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const { decision, expiresHours } = req.body
+    const expiresAt = decision === 'approved' && expiresHours
+      ? new Date(Date.now() + expiresHours * 3600000).toISOString()
+      : null
+    const { rows } = await pool.query(
+      `UPDATE extend_requests SET status = $1, expires_at = $2
+       WHERE id = $3 AND sender_id = $4 RETURNING requester_id, library_item_id`,
+      [decision, expiresAt, req.params.requestId, req.user.userId]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Not found' })
+    // Notify requester
+    const { rows: rRow } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [rows[0].requester_id])
+    const { rows: sRow } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.userId])
+    if (rRow[0]?.fcm_token) {
+      const { sendPush } = await import('../firebase.js')
+      const body = decision === 'approved'
+        ? expiresHours ? `Approved — ${expiresHours}h extension` : 'Approved — no time limit'
+        : 'Extension request denied'
+      await sendPush(rRow[0].fcm_token, sRow[0].username, body, { type: 'extend_decision', decision, expiresAt: expiresAt ?? '', libraryItemId: rows[0].library_item_id }).catch(() => {})
+    }
+    return { ok: true, expiresAt }
+  })
+
+  // Requester polls for outcome of their extend request
+  app.get('/messages/extend-requests/:requestId/status', async (req, reply) => {
+    const { rows } = await pool.query(
+      `SELECT status, expires_at FROM extend_requests WHERE id = $1 AND requester_id = $2`,
+      [req.params.requestId, req.user.userId]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Not found' })
+    return { status: rows[0].status, expiresAt: rows[0].expires_at ?? null }
+  })
+
   // Recipient polls for the outcome of their save request
   app.get('/messages/save-requests/:requestId/status', async (req, reply) => {
     const { rows } = await pool.query(

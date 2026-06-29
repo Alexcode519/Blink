@@ -47,6 +47,12 @@ export async function loadIndex(pruneExpired = true) {
   return valid
 }
 
+export async function updateExpiresAt(id, expiresAt) {
+  const index = await loadIndex(false)
+  const updated = index.map(i => i.id === id ? { ...i, expiresAt: expiresAt ?? null } : i)
+  await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(updated))
+}
+
 export async function deleteItem(id) {
   const index = await loadIndex()
   const item = index.find(i => i.id === id)

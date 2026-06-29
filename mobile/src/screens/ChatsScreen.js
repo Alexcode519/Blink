@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import Svg, { Path, Line, Circle, Polyline, Rect, G } from 'react-native-svg'
 import RNFS from 'react-native-fs'
 import { api } from '../api/client'
+import ExtendRequestModal from '../components/ExtendRequestModal'
 
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 
@@ -50,7 +51,8 @@ export default function ChatsScreen({ navigation }) {
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
   const [avatarUri, setAvatarUri] = useState(null)
-  const [openMenu, setOpenMenu] = useState(null) // username of row with open menu
+  const [openMenu, setOpenMenu] = useState(null)
+  const [extendRequest, setExtendRequest] = useState(null) // pending extend request for sender to decide
   const isFocused = useRef(false)
 
   function loadConversations() {
@@ -72,10 +74,22 @@ export default function ChatsScreen({ navigation }) {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      if (isFocused.current) loadConversations()
+      if (!isFocused.current) return
+      loadConversations()
+      api.get('/messages/extend-requests/pending')
+        .then(({ requests }) => { if (requests.length && !extendRequest) setExtendRequest(requests[0]) })
+        .catch(() => {})
     }, 3000)
     return () => clearInterval(timer)
-  }, [])
+  }, [extendRequest])
+
+  async function handleExtendDecide(decision, hours) {
+    if (!extendRequest) return
+    try {
+      await api.patch(`/messages/extend-requests/${extendRequest.id}`, { decision, expiresHours: hours ?? undefined })
+    } catch {}
+    setExtendRequest(null)
+  }
 
   function blockUser(username) {
     Alert.alert(
@@ -159,6 +173,9 @@ export default function ChatsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      {extendRequest && (
+        <ExtendRequestModal request={extendRequest} onDecide={handleExtendDecide} />
+      )}
       <View style={styles.topRow}>
         <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
           <FeatherIcon />

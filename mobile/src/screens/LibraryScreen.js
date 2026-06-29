@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
 import {
   View, Text, FlatList, Image, TouchableOpacity,
   StyleSheet, Alert, Dimensions, Modal, Pressable,
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
-import { loadIndex, deleteItem } from '../library/storage'
+import { loadIndex, deleteItem, updateExpiresAt } from '../library/storage'
+import { api } from '../api/client'
 
 const COL = 3
 const SIZE = (Dimensions.get('window').width - 4) / COL
@@ -13,6 +14,7 @@ export default function LibraryScreen({ navigation, route }) {
   const fromUsername = route?.params?.fromUsername ?? null
   const [items, setItems] = useState([])
   const [preview, setPreview] = useState(null)
+  const pendingExtend = useRef({}) // itemId -> requestId being polled
 
   useFocusEffect(useCallback(() => {
     loadIndex().then(idx => {
@@ -32,6 +34,44 @@ export default function LibraryScreen({ navigation, route }) {
         }
       },
     ])
+  }
+
+  async function requestExtend(item) {
+    if (pendingExtend.current[item.id]) {
+      Alert.alert('Pending', 'You already have a pending request for this item.')
+      return
+    }
+    try {
+      const { id: requestId } = await api.post('/messages/extend-requests', {
+        libraryItemId: item.id,
+        senderUsername: item.fromUsername,
+      })
+      Alert.alert('Requested', 'Your request has been sent. We\'ll update the item when they respond.')
+      pendingExtend.current[item.id] = requestId
+      // Poll for outcome
+      const poll = setInterval(async () => {
+        try {
+          const { status, expiresAt } = await api.get(`/messages/extend-requests/${requestId}/status`)
+          if (status !== 'pending') {
+            clearInterval(poll)
+            delete pendingExtend.current[item.id]
+            if (status === 'approved') {
+              await updateExpiresAt(item.id, expiresAt)
+              setItems(prev => prev.map(i => i.id === item.id ? { ...i, expiresAt: expiresAt ?? null } : i))
+              Alert.alert('Approved!', expiresAt ? `Item extended until ${new Date(expiresAt).toLocaleString()}` : 'No time limit set.')
+            } else {
+              Alert.alert('Denied', 'The sender denied your extension request.')
+            }
+          }
+        } catch {}
+      }, 5000)
+    } catch (err) {
+      if (err.message?.includes('409') || err.message?.includes('already')) {
+        Alert.alert('Pending', 'You already have a pending request for this item.')
+      } else {
+        Alert.alert('Error', err.message)
+      }
+    }
   }
 
   function expiryLabel(expiresAt) {
@@ -63,6 +103,11 @@ export default function LibraryScreen({ navigation, route }) {
         <Text style={styles.fileName} numberOfLines={2}>{item.label}</Text>
         <Text style={styles.fileMeta}>{item.fromUsername}</Text>
         {expiry && <Text style={styles.expiryText}>{expiry}</Text>}
+        {item.expiresAt && (
+          <TouchableOpacity onPress={() => requestExtend(item)} style={styles.extendBadge}>
+            <Text style={styles.extendBadgeText}>+ More time</Text>
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
     )
   }
@@ -104,9 +149,16 @@ export default function LibraryScreen({ navigation, route }) {
           )}
           <View style={styles.previewMeta}>
             <Text style={styles.previewFrom}>From {preview?.fromUsername}</Text>
-            <TouchableOpacity onPress={() => confirmDelete(preview?.id)}>
-              <Text style={styles.deleteBtn}>Delete</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 16 }}>
+              {preview?.expiresAt && (
+                <TouchableOpacity onPress={() => requestExtend(preview)}>
+                  <Text style={styles.extendBtn}>+ More time</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => confirmDelete(preview?.id)}>
+                <Text style={styles.deleteBtn}>Delete</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -138,4 +190,7 @@ const styles = StyleSheet.create({
   previewMeta:    { position: 'absolute', bottom: 40, flexDirection: 'row', justifyContent: 'space-between', width: '80%' },
   previewFrom:    { color: '#888', fontSize: 14 },
   deleteBtn:      { color: '#ff4444', fontSize: 14, fontWeight: '600' },
+  extendBtn:      { color: '#4f6ef7', fontSize: 14, fontWeight: '600' },
+  extendBadge:    { marginTop: 4, backgroundColor: '#1a2a4a', borderRadius: 4, paddingVertical: 2, paddingHorizontal: 6 },
+  extendBadgeText:{ color: '#4f6ef7', fontSize: 9, fontWeight: '600' },
 })
