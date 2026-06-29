@@ -317,6 +317,27 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
         )}
       </View>
 
+      {/* Help section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Help</Text>
+        <TouchableOpacity style={styles.helpRow} onPress={() => navigation.navigate('FAQ')}>
+          <Text style={styles.helpIcon2}>❓</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.helpRowLabel}>Frequently Asked Questions</Text>
+            <Text style={styles.helpRowHint}>Answers to common questions about Blink</Text>
+          </View>
+          <Text style={styles.helpChevron}>›</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.helpRow, { marginTop: 10 }]} onPress={() => navigation.navigate('Feedback')}>
+          <Text style={styles.helpIcon2}>💬</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.helpRowLabel}>Send Feedback</Text>
+            <Text style={styles.helpRowHint}>Report a bug or suggest an improvement</Text>
+          </View>
+          <Text style={styles.helpChevron}>›</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Lock / Sign out */}
       {(patternEnabled || biometricEnabled) ? (
         <>
@@ -367,6 +388,11 @@ const styles = StyleSheet.create({
   signOutHint:      { color: '#444', fontSize: 12, textAlign: 'center', marginTop: 10 },
   logoutBtn:        { borderWidth: 1, borderColor: '#ff4444', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 12 },
   logoutText:       { color: '#ff4444', fontWeight: '600', fontSize: 15 },
+  helpRow:          { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14, gap: 12 },
+  helpIcon2:        { fontSize: 20 },
+  helpRowLabel:     { color: '#fff', fontSize: 15, fontWeight: '500' },
+  helpRowHint:      { color: '#555', fontSize: 12, marginTop: 2 },
+  helpChevron:      { color: '#444', fontSize: 20 },
   langSelector:     { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14, gap: 12 },
   langSelectorFlag: { fontSize: 22 },
   langSelectorName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '500' },

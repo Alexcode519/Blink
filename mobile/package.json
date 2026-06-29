@@ -21,6 +21,7 @@
     "@react-navigation/native-stack": "^7.17.6",
     "react": "19.2.3",
     "react-native": "0.86.0",
+    "react-native-audio-recorder-player": "^3.5.3",
     "react-native-biometrics": "^3.0.1",
     "react-native-fs": "^2.20.0",
     "react-native-get-random-values": "^2.0.0",

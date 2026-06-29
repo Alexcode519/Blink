@@ -15,6 +15,8 @@ import LibraryScreen from '../screens/LibraryScreen'
 import ProfileScreen from '../screens/ProfileScreen'
 import SetPatternScreen from '../screens/SetPatternScreen'
 import PatternLoginScreen from '../screens/PatternLoginScreen'
+import FAQScreen from '../screens/FAQScreen'
+import FeedbackScreen from '../screens/FeedbackScreen'
 
 const Stack = createNativeStackNavigator()
 const screenOpts = { headerShown: false, contentStyle: { backgroundColor: '#0a0a0a' } }
@@ -131,6 +133,8 @@ export default function AppNavigator() {
             {props => <ProfileScreen {...props} onLogout={handleLogout} onLock={handleLock} />}
           </Stack.Screen>
           <Stack.Screen name="SetPattern" component={SetPatternScreen} />
+          <Stack.Screen name="FAQ" component={FAQScreen} />
+          <Stack.Screen name="Feedback" component={FeedbackScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     )

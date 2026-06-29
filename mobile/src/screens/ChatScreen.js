@@ -4,6 +4,7 @@ import {
   StyleSheet, Alert, Platform, Image, Modal, Pressable, PermissionsAndroid,
   PanResponder, Animated,
 } from 'react-native'
+import AudioRecorderPlayer from 'react-native-audio-recorder-player'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker'
 import { pick, isCancel, types } from '@react-native-documents/picker'
@@ -35,6 +36,10 @@ export default function ChatScreen({ route, navigation }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMatchIndex, setSearchMatchIndex] = useState(0)
   const searchInputRef = useRef(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordSecs, setRecordSecs] = useState(0)
+  const [playingId, setPlayingId] = useState(null)
+  const audioRecorder = useRef(new AudioRecorderPlayer()).current
   const typingTimerRef = useRef(null)
   const pendingSaves = useRef({})
   const listRef  = useRef(null)
@@ -178,8 +183,8 @@ export default function ChatScreen({ route, navigation }) {
         try {
           let payload = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKeyRef.current)
           const ct = m.content_type
-          if (ct === 'image' || ct === 'video') {
-            const ext = ct === 'image' ? 'jpg' : 'mp4'
+          if (ct === 'image' || ct === 'video' || ct === 'audio') {
+            const ext = ct === 'image' ? 'jpg' : ct === 'video' ? 'mp4' : 'mp4'
             const uri = await saveMediaFile(m.id, payload, ext)
             if (uri) payload = uri
           }
@@ -486,6 +491,7 @@ export default function ChatScreen({ route, navigation }) {
     const isImage = item.contentType === 'image'
     const isVideo = item.contentType === 'video'
     const isDoc   = item.contentType === 'document'
+    const isAudio = item.contentType === 'audio'
     const canSave = !item.mine && (isImage || isVideo || isDoc)
 
     const bubble = (
@@ -532,7 +538,14 @@ export default function ChatScreen({ route, navigation }) {
                 <Text style={styles.mediaLabel}>{item.label ?? 'Document'}</Text>
               </View>
             )}
-            {!isImage && !isVideo && !isDoc && (
+            {isAudio && (
+              <TouchableOpacity style={styles.audioBubble} onPress={() => playAudio(item)}>
+                <Icon name={playingId === item.id ? 'pause-circle' : 'play-circle'} size={28} color="#4f6ef7" />
+                <Text style={styles.audioLabel}>Voice note</Text>
+                <Icon name="volume-2" size={14} color="#666" />
+              </TouchableOpacity>
+            )}
+            {!isImage && !isVideo && !isDoc && !isAudio && (
               <Text style={styles.bubbleText}>
                 {searchQuery.trim() && item.payload?.toLowerCase().includes(searchQuery.toLowerCase())
                   ? (() => {
@@ -563,6 +576,84 @@ export default function ChatScreen({ route, navigation }) {
       </View>
     )
     return item.mine ? <SwipeToDelete item={item}>{bubble}</SwipeToDelete> : bubble
+  }
+
+  async function startRecording() {
+    try {
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO)
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert('Permission denied', 'Microphone access is required to send voice notes.')
+          return
+        }
+      }
+      setIsRecording(true)
+      setRecordSecs(0)
+      const path = `${RNFS.CachesDirectoryPath}/blink_voice_${Date.now()}.mp4`
+      await audioRecorder.startRecorder(path)
+      audioRecorder.addRecordBackListener(e => setRecordSecs(Math.floor(e.currentPosition / 1000)))
+    } catch (err) {
+      setIsRecording(false)
+      Alert.alert('Recording error', err.message)
+    }
+  }
+
+  async function stopRecordingAndSend() {
+    if (!isRecording) return
+    try {
+      const path = await audioRecorder.stopRecorder()
+      audioRecorder.removeRecordBackListener()
+      setIsRecording(false)
+      setRecordSecs(0)
+      if (recordSecs < 1) return // too short, discard
+      const base64 = await RNFS.readFile(path, 'base64')
+      await sendPayload(base64, 'audio', path)
+      RNFS.unlink(path).catch(() => {})
+    } catch (err) {
+      setIsRecording(false)
+      Alert.alert('Error', err.message)
+    }
+  }
+
+  async function cancelRecording() {
+    if (!isRecording) return
+    await audioRecorder.stopRecorder().catch(() => {})
+    audioRecorder.removeRecordBackListener()
+    setIsRecording(false)
+    setRecordSecs(0)
+  }
+
+  async function playAudio(item) {
+    try {
+      if (playingId === item.id) {
+        await audioRecorder.stopPlayer()
+        audioRecorder.removePlayBackListener()
+        setPlayingId(null)
+        return
+      }
+      if (playingId) {
+        await audioRecorder.stopPlayer()
+        audioRecorder.removePlayBackListener()
+      }
+      const uri = item.payload.startsWith('file://') ? item.payload : `file://${item.payload}`
+      setPlayingId(item.id)
+      await audioRecorder.startPlayer(uri)
+      audioRecorder.addPlayBackListener(e => {
+        if (e.currentPosition >= e.duration) {
+          audioRecorder.stopPlayer().catch(() => {})
+          audioRecorder.removePlayBackListener()
+          setPlayingId(null)
+        }
+      })
+    } catch (err) {
+      setPlayingId(null)
+    }
+  }
+
+  function formatSecs(s) {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return `${m}:${sec.toString().padStart(2, '0')}`
   }
 
   const searchMatches = searchQuery.trim().length > 0
@@ -674,25 +765,45 @@ export default function ChatScreen({ route, navigation }) {
         onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
       />
 
-      <View style={styles.inputRow}>
-        <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={styles.iconBtn}>
-          <Icon name="paperclip" size={22} color="#888" />
-        </TouchableOpacity>
-        <TextInput
-          ref={inputRef}
-          style={styles.input}
-          value={text}
-          onChangeText={handleTyping}
-          placeholder="Message…"
-          placeholderTextColor="#555"
-          onSubmitEditing={sendText}
-          returnKeyType="send"
-          multiline
-        />
-        <TouchableOpacity onPress={sendText} style={styles.sendBtn}>
-          <Text style={styles.sendText}>Send</Text>
-        </TouchableOpacity>
-      </View>
+      {isRecording ? (
+        <View style={styles.recordingBar}>
+          <TouchableOpacity onPress={cancelRecording} style={styles.cancelRecBtn}>
+            <Icon name="x" size={20} color="#ff4444" />
+          </TouchableOpacity>
+          <View style={styles.recordingPulse} />
+          <Text style={styles.recordingTime}>{formatSecs(recordSecs)}</Text>
+          <Text style={styles.recordingHint}>Recording… release to send</Text>
+          <TouchableOpacity onPress={stopRecordingAndSend} style={styles.sendRecBtn}>
+            <Icon name="send" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.inputRow}>
+          <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={styles.iconBtn}>
+            <Icon name="paperclip" size={22} color="#888" />
+          </TouchableOpacity>
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            value={text}
+            onChangeText={handleTyping}
+            placeholder="Message…"
+            placeholderTextColor="#555"
+            onSubmitEditing={sendText}
+            returnKeyType="send"
+            multiline
+          />
+          {text.trim().length > 0 ? (
+            <TouchableOpacity onPress={sendText} style={styles.sendBtn}>
+              <Text style={styles.sendText}>Send</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPressIn={startRecording} onPressOut={stopRecordingAndSend} style={styles.micBtn}>
+              <Icon name="mic" size={22} color="#4f6ef7" />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       <Modal transparent visible={showAttachMenu} animationType="slide" onRequestClose={() => setShowAttachMenu(false)}>
         <Pressable style={styles.menuOverlay} onPress={() => setShowAttachMenu(false)}>
@@ -746,6 +857,15 @@ const styles = StyleSheet.create({
   headerStatus:  { color: '#555', fontSize: 12, marginTop: 1 },
   headerTyping:  { color: '#4f6ef7' },
   backBtn:       { width: 36 },
+  audioBubble:   { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  audioLabel:    { color: '#ccc', fontSize: 14, flex: 1 },
+  micBtn:        { padding: 8 },
+  recordingBar:  { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#1f1f1f', gap: 10 },
+  cancelRecBtn:  { padding: 6 },
+  recordingPulse:{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#ff4444' },
+  recordingTime: { color: '#fff', fontSize: 16, fontWeight: '600', minWidth: 40 },
+  recordingHint: { color: '#666', fontSize: 13, flex: 1 },
+  sendRecBtn:    { backgroundColor: '#4f6ef7', borderRadius: 20, padding: 8 },
   searchBar:     { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1f1f1f', gap: 6 },
   searchInput:   { flex: 1, color: '#fff', fontSize: 15, backgroundColor: '#1a1a1a', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
   searchCount:   { color: '#888', fontSize: 13, minWidth: 56, textAlign: 'center' },

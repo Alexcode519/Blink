@@ -141,6 +141,26 @@ export async function userRoutes(app) {
     return { ok: true }
   })
 
+  // Submit feedback
+  app.post('/feedback', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['category', 'message'],
+        properties: {
+          category: { type: 'string', enum: ['bug', 'feature', 'general'] },
+          message: { type: 'string', minLength: 10, maxLength: 2000 },
+        },
+      },
+    },
+  }, async (req) => {
+    await pool.query(
+      'INSERT INTO feedback (user_id, category, message) VALUES ($1, $2, $3)',
+      [req.user.userId, req.body.category, req.body.message]
+    )
+    return { ok: true }
+  })
+
   // Block a user
   app.post('/users/block/:username', async (req, reply) => {
     const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()])
