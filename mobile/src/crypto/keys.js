@@ -25,17 +25,15 @@ export async function generateAndStoreKeyPair() {
 }
 
 async function loadPrivateKey() {
-  // Try up to 3 times — camera/gallery activities can briefly suspend the JS context
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await new Promise(r => setTimeout(r, 300))
-    try {
-      const creds = await Keychain.getGenericPassword({ service: KEYCHAIN_SERVICE })
-      if (creds && creds.password) return decodeBase64(creds.password)
-    } catch (e) {
-      console.warn('Keychain load failed (attempt', attempt + 1, '):', e.message)
-    }
-    const backup = await AsyncStorage.getItem(STORAGE_KEY)
-    if (backup) return decodeBase64(backup)
+  // AsyncStorage is always written by generateAndStoreKeyPair — use it as source of truth
+  const backup = await AsyncStorage.getItem(STORAGE_KEY)
+  if (backup) return decodeBase64(backup)
+  // Fall back to Keychain if AsyncStorage is empty
+  try {
+    const creds = await Keychain.getGenericPassword({ service: KEYCHAIN_SERVICE })
+    if (creds && creds.password) return decodeBase64(creds.password)
+  } catch (e) {
+    console.warn('Keychain load failed:', e.message)
   }
   throw new Error('No private key found — re-register')
 }
