@@ -23,6 +23,7 @@ export default function AppNavigator() {
   const [authState, setAuthState] = useState(null)
   const pendingChatRef = useRef(null)
   const appStateRef = useRef(AppState.currentState)
+  const wasBackgroundRef = useRef(false)
 
   useEffect(() => {
     async function check() {
@@ -60,7 +61,10 @@ export default function AppNavigator() {
     if (authState !== 'loggedIn') return
     const sub = AppState.addEventListener('change', async (next) => {
       if (appStateRef.current === 'active' && next === 'background') {
-        if (pickerGuard.isActive()) { appStateRef.current = next; return }
+        if (!pickerGuard.isActive()) wasBackgroundRef.current = true
+      }
+      if (next === 'active' && wasBackgroundRef.current) {
+        wasBackgroundRef.current = false
         const enabled = await AsyncStorage.getItem('blink_pattern_enabled')
         const pattern = await AsyncStorage.getItem('blink_pattern')
         setAuthState(enabled === 'true' && pattern ? 'pattern' : 'locked')
