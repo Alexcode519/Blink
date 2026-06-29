@@ -69,7 +69,7 @@ export default function LibraryScreen({ navigation, route }) {
       if (err.message?.includes('409') || err.message?.includes('already')) {
         Alert.alert('Pending', 'You already have a pending request for this item.')
       } else {
-        Alert.alert('Error', err.message)
+        Alert.alert('Error', `Could not send request: ${err.message}`)
       }
     }
   }

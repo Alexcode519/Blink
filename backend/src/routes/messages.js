@@ -294,27 +294,32 @@ export async function messageRoutes(app) {
       },
     },
   }, async (req, reply) => {
-    const { libraryItemId, senderUsername } = req.body
-    const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [senderUsername.toLowerCase()])
-    if (!rows.length) return reply.code(404).send({ error: 'Sender not found' })
-    const senderId = rows[0].id
-    // Check no pending request already
-    const { rows: existing } = await pool.query(
-      `SELECT id FROM extend_requests WHERE library_item_id = $1 AND requester_id = $2 AND status = 'pending'`,
-      [libraryItemId, req.user.userId]
-    )
-    if (existing.length) return reply.code(409).send({ error: 'Request already pending' })
-    const { rows: inserted } = await pool.query(
-      `INSERT INTO extend_requests (library_item_id, requester_id, sender_id) VALUES ($1, $2, $3) RETURNING id`,
-      [libraryItemId, req.user.userId, senderId]
-    )
-    // Notify sender via push
-    const { rows: senderRow } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [senderId])
-    const { rows: requesterRow } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.userId])
-    if (senderRow[0]?.fcm_token) {
-      await sendPushNotification(senderRow[0].fcm_token, `${requesterRow[0].username} wants more time`, 'Time extension request', { type: 'extend_request' })
+    try {
+      const { libraryItemId, senderUsername } = req.body
+      const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [senderUsername.toLowerCase()])
+      if (!rows.length) return reply.code(404).send({ error: 'Sender not found' })
+      const senderId = rows[0].id
+      // Check no pending request already
+      const { rows: existing } = await pool.query(
+        `SELECT id FROM extend_requests WHERE library_item_id = $1 AND requester_id = $2 AND status = 'pending'`,
+        [libraryItemId, req.user.userId]
+      )
+      if (existing.length) return reply.code(409).send({ error: 'Request already pending' })
+      const { rows: inserted } = await pool.query(
+        `INSERT INTO extend_requests (library_item_id, requester_id, sender_id) VALUES ($1, $2, $3) RETURNING id`,
+        [libraryItemId, req.user.userId, senderId]
+      )
+      // Notify sender via push
+      const { rows: senderRow } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [senderId])
+      const { rows: requesterRow } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.userId])
+      if (senderRow[0]?.fcm_token) {
+        await sendPushNotification(senderRow[0].fcm_token, `${requesterRow[0].username} wants more time`, 'Time extension request', { type: 'extend_request' })
+      }
+      return { id: inserted[0].id }
+    } catch (err) {
+      console.error('extend-request POST error:', err.message)
+      return reply.code(500).send({ error: err.message })
     }
-    return { id: inserted[0].id }
   })
 
   // Sender polls for pending extend requests they need to decide on

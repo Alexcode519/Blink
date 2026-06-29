@@ -18,7 +18,7 @@ pool.query(`CREATE TABLE IF NOT EXISTS extend_requests (
   status TEXT NOT NULL DEFAULT 'pending',
   expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
-)`).catch(() => {})
+)`).then(() => console.log('extend_requests table ready')).catch(e => console.error('extend_requests migration failed:', e.message))
 pool.query(`CREATE TABLE IF NOT EXISTS blocked_users (
   blocker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
