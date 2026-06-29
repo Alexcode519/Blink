@@ -68,7 +68,13 @@ export async function messageRoutes(app) {
         other_username,
         other_public_key,
         other_avatar,
-        last_at
+        last_at,
+        (
+          SELECT COUNT(*) FROM messages um
+          WHERE um.sender_id = other_user
+            AND um.recipient_id = $1
+            AND um.read_at IS NULL
+        ) AS unread_count
        FROM (
          SELECT
            CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END AS other_user,
@@ -106,6 +112,11 @@ export async function messageRoutes(app) {
        LIMIT 200`,
       [req.user.userId, otherId]
     )
+    // Mark all messages from the other user as read
+    pool.query(
+      `UPDATE messages SET read_at = NOW() WHERE sender_id = $1 AND recipient_id = $2 AND read_at IS NULL`,
+      [otherId, req.user.userId]
+    ).catch(() => {})
     return { messages: rows }
   })
 

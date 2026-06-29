@@ -138,6 +138,11 @@ export default function ChatsScreen({ navigation }) {
             : <View style={styles.avatar}><Text style={styles.avatarText}>{u[0].toUpperCase()}</Text></View>
           }
           <Text style={styles.username}>{u}</Text>
+          {item.unread_count > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{item.unread_count > 99 ? '99+' : item.unread_count}</Text>
+            </View>
+          )}
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.chatLibBtn}
@@ -233,6 +238,8 @@ const styles = StyleSheet.create({
   avatar:       { width: 44, height: 44, borderRadius: 22, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center' },
   avatarImg:    { width: 44, height: 44, borderRadius: 22 },
   avatarText:   { color: '#fff', fontSize: 18, fontWeight: '700' },
-  username:     { color: '#fff', fontSize: 16, fontWeight: '500' },
+  username:     { color: '#fff', fontSize: 16, fontWeight: '500', flex: 1 },
+  badge:        { backgroundColor: '#4f6ef7', borderRadius: 10, minWidth: 20, height: 20, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
+  badgeText:    { color: '#fff', fontSize: 11, fontWeight: '700' },
   hint:         { color: '#555', textAlign: 'center', marginTop: 60, fontSize: 15 },
 })
