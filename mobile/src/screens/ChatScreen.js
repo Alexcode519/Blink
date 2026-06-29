@@ -430,19 +430,15 @@ export default function ChatScreen({ route, navigation }) {
                 resizeMode="cover"
               />
             )}
-            {isVideo && (() => {
-              const path = `${RNFS.CachesDirectoryPath}/vid_${item.id}.mp4`
-              RNFS.writeFile(path, item.payload, 'base64').catch(() => {})
-              return (
-                <Video
-                  source={{ uri: `file://${path}` }}
-                  style={styles.videoPreview}
-                  controls
-                  resizeMode="cover"
-                  paused
-                />
-              )
-            })()}
+            {isVideo && (
+              <Video
+                source={{ uri: item.payload.startsWith('file://') ? item.payload : `file://${item.payload}` }}
+                style={styles.videoPreview}
+                controls
+                resizeMode="cover"
+                paused
+              />
+            )}
             {isDoc && (
               <View style={styles.mediaChip}>
                 <Text style={styles.mediaIcon}>📄</Text>
