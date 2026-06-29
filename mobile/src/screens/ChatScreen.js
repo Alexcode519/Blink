@@ -206,7 +206,7 @@ export default function ChatScreen({ route, navigation }) {
             if (uri) payload = uri
           }
           return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at }
-        } catch {
+        } catch (e) {
           return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at }
         }
       }))
@@ -253,7 +253,7 @@ export default function ChatScreen({ route, navigation }) {
               if (uri) payload = uri
             }
             return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at }
-          } catch {
+          } catch (e) {
             return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at }
           }
         })

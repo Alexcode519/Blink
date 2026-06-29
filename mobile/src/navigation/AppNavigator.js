@@ -5,6 +5,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import messaging from '@react-native-firebase/messaging'
 import { setupPushNotifications } from '../notifications/setup'
+import { syncPublicKey } from '../crypto/keys'
+import { api } from '../api/client'
 import { pickerGuard } from '../utils/pickerGuard'
 import RegisterScreen from '../screens/RegisterScreen'
 import LoginScreen from '../screens/LoginScreen'
@@ -38,6 +40,12 @@ export default function AppNavigator() {
 
       const token = await AsyncStorage.getItem('token')
       if (!token) { setAuthState('loggedOut'); return }
+      // Re-upload public key derived from stored private key — self-heals any server/device mismatch
+      try {
+        const publicKey = await syncPublicKey()
+        await api.patch('/users/me/public-key', { publicKey })
+      } catch {}
+
       const patternEnabled = await AsyncStorage.getItem('blink_pattern_enabled')
       const pattern = await AsyncStorage.getItem('blink_pattern')
       if (patternEnabled === 'true' && pattern) {

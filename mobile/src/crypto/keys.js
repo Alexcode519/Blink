@@ -6,6 +6,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 const KEYCHAIN_SERVICE = 'blink_keypair'
 const STORAGE_KEY = 'blink_private_key_backup'
 
+export async function syncPublicKey() {
+  const privateKey = await loadPrivateKey()
+  const keyPair = nacl.box.keyPair.fromSecretKey(privateKey)
+  return encodeBase64(keyPair.publicKey)
+}
+
 export async function generateAndStoreKeyPair() {
   const keyPair = nacl.box.keyPair()
   const privateKeyB64 = encodeBase64(keyPair.secretKey)
