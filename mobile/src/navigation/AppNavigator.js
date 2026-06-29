@@ -76,16 +76,16 @@ export default function AppNavigator() {
 
   if (authState === null) return null
 
-  function handleLogin() {
-    wasBackgroundRef.current = false   // clear any stale background flag from before login
+  async function handleLogin() {
+    wasBackgroundRef.current = false
+    await setupPushNotifications()   // request permissions BEFORE lock listener is active
     setAuthState('loggedIn')
-    setupPushNotifications()
   }
   function handleLogout() { pendingChatRef.current = null; setAuthState('loggedOut') }
-  function handlePatternSuccess() {
+  async function handlePatternSuccess() {
     wasBackgroundRef.current = false
+    await setupPushNotifications()
     setAuthState('loggedIn')
-    setupPushNotifications()
   }
   function handlePatternFallback() { setAuthState('locked') }
   async function handleLock() {
