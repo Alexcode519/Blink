@@ -446,6 +446,7 @@ export default function ChatScreen({ route, navigation }) {
         { text: 'Delete', style: 'destructive', onPress: async () => {
           try {
             await api.delete(`/messages/conversation/${recipientUsername}`)
+            await AsyncStorage.removeItem(CACHE_KEY)
             navigation.goBack()
           } catch (err) {
             Alert.alert('Error', err.message)
