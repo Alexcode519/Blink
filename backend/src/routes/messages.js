@@ -237,6 +237,16 @@ export async function messageRoutes(app) {
     return { readIds: rows.map(r => r.id) }
   })
 
+  // Delete a single sent message (sender only)
+  app.delete('/messages/:messageId', async (req, reply) => {
+    const { rows } = await pool.query(
+      `DELETE FROM messages WHERE id = $1 AND sender_id = $2 RETURNING id`,
+      [req.params.messageId, req.user.userId]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Message not found or not yours' })
+    return { ok: true }
+  })
+
   // Delete all messages between current user and another user (for this user only)
   app.delete('/messages/conversation/:username', async (req, reply) => {
     const { rows: other } = await pool.query(

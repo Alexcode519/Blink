@@ -403,6 +403,29 @@ export default function ChatScreen({ route, navigation }) {
     return null
   }
 
+  function confirmDeleteMessage(item) {
+    Alert.alert(
+      'Delete message?',
+      'This will delete the message for everyone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteMessage(item) },
+      ]
+    )
+  }
+
+  async function deleteMessage(item) {
+    try {
+      await api.delete(`/messages/${item.id}`)
+      setMessages(prev => prev.filter(m => m.id !== item.id))
+      if (item.payload && item.payload.startsWith('file://')) {
+        RNFS.unlink(item.payload.replace('file://', '')).catch(() => {})
+      }
+    } catch (err) {
+      Alert.alert('Error', err.message)
+    }
+  }
+
   function renderBubble(item) {
     const isImage = item.contentType === 'image'
     const isVideo = item.contentType === 'video'
@@ -411,7 +434,10 @@ export default function ChatScreen({ route, navigation }) {
 
     return (
       <View style={item.mine ? styles.mineOuter : styles.theirsOuter}>
-        <View style={[styles.bubbleWrap, item.mine ? styles.mineWrap : styles.theirsWrap]}>
+        <View
+          style={[styles.bubbleWrap, item.mine ? styles.mineWrap : styles.theirsWrap]}
+          onStartShouldSetResponder={() => false}
+        >
           {!item.mine && (
             recipientAvatar
               ? <Image source={{ uri: recipientAvatar }} style={styles.avatarThumb} />
@@ -422,6 +448,11 @@ export default function ChatScreen({ route, navigation }) {
               ? <Image source={{ uri: myAvatar }} style={styles.avatarThumb} />
               : <View style={styles.avatarPlaceholder}><Text style={styles.avatarInitial}>{myUsername[0]?.toUpperCase()}</Text></View>
           )}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onLongPress={item.mine ? () => confirmDeleteMessage(item) : undefined}
+            delayLongPress={400}
+          >
           <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
             {isImage && (
               <Image
@@ -454,6 +485,7 @@ export default function ChatScreen({ route, navigation }) {
               </TouchableOpacity>
             )}
           </View>
+          </TouchableOpacity>
         </View>
         <View style={[styles.tickRow, !item.mine && styles.tickRowTheirs]}>
           {!!item.createdAt && (
