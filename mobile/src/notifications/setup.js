@@ -1,6 +1,7 @@
 import messaging from '@react-native-firebase/messaging'
 import notifee, { AndroidImportance } from '@notifee/react-native'
 import { api } from '../api/client'
+import { getActiveChat } from './activeChat'
 
 async function ensureChannel() {
   await notifee.createChannel({
@@ -23,6 +24,8 @@ export async function displayMessageNotification(remoteMessage) {
     const title  = data.title ?? 'Blink'
     const body   = data.body  ?? 'New message'
     const sender = data.senderUsername ?? ''
+    // Skip the popup if the user is already looking at that conversation
+    if (sender && sender === getActiveChat()) return
     await notifee.displayNotification({
       id: notifIdForSender(sender),
       title,

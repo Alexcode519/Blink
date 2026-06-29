@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
   btnText:          { color: '#fff', fontWeight: '600', fontSize: 15 },
   backBtn:          { marginBottom: 16 },
   backText:         { color: '#4f6ef7', fontSize: 16 },
-  settingRow:       { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14 },
+  settingRow:       { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14, marginBottom: 12 },
   settingLabel:     { color: '#fff', fontSize: 15, fontWeight: '500' },
   settingHint:      { color: '#555', fontSize: 12, marginTop: 2 },
   lockBtn:          { borderWidth: 1, borderColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 10 },

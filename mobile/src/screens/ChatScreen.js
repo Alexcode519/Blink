@@ -19,6 +19,7 @@ import SaveRequestModal from '../components/SaveRequestModal'
 import Icon from 'react-native-vector-icons/Feather'
 import notifee from '@notifee/react-native'
 import { notifIdForSender } from '../notifications/setup'
+import { setActiveChat, clearActiveChat } from '../notifications/activeChat'
 
 const POLL_INTERVAL = 3000
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
@@ -99,6 +100,9 @@ export default function ChatScreen({ route, navigation }) {
     // Mark incoming messages as read and dismiss notification
     api.post(`/messages/read/${recipientUsername}`, {}).catch(() => {})
     notifee.cancelNotification(notifIdForSender(recipientUsername)).catch(() => {})
+    setActiveChat(recipientUsername)
+    const focusSub = navigation.addListener('focus', () => setActiveChat(recipientUsername))
+    const blurSub  = navigation.addListener('blur', () => clearActiveChat())
     const inboxTimer    = setInterval(pollInbox, POLL_INTERVAL)
     const senderTimer   = setInterval(pollSaveRequests, POLL_INTERVAL)
     const receiptTimer  = setInterval(pollReadReceipts, POLL_INTERVAL)
@@ -108,6 +112,8 @@ export default function ChatScreen({ route, navigation }) {
       clearInterval(inboxTimer); clearInterval(senderTimer)
       clearInterval(receiptTimer); clearInterval(statusTimer)
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
+      focusSub(); blurSub()
+      clearActiveChat()
     }
   }, [])
 
