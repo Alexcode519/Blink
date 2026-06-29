@@ -312,8 +312,7 @@ export async function messageRoutes(app) {
     const { rows: senderRow } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [senderId])
     const { rows: requesterRow } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.userId])
     if (senderRow[0]?.fcm_token) {
-      const { sendPush } = await import('../firebase.js')
-      await sendPush(senderRow[0].fcm_token, `${requesterRow[0].username} wants more time`, 'Time extension request', { type: 'extend_request' }).catch(() => {})
+      await sendPushNotification(senderRow[0].fcm_token, `${requesterRow[0].username} wants more time`, 'Time extension request', { type: 'extend_request' })
     }
     return { id: inserted[0].id }
   })
@@ -358,11 +357,10 @@ export async function messageRoutes(app) {
     const { rows: rRow } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [rows[0].requester_id])
     const { rows: sRow } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.userId])
     if (rRow[0]?.fcm_token) {
-      const { sendPush } = await import('../firebase.js')
       const body = decision === 'approved'
         ? expiresHours ? `Approved — ${expiresHours}h extension` : 'Approved — no time limit'
         : 'Extension request denied'
-      await sendPush(rRow[0].fcm_token, sRow[0].username, body, { type: 'extend_decision', decision, expiresAt: expiresAt ?? '', libraryItemId: rows[0].library_item_id }).catch(() => {})
+      await sendPushNotification(rRow[0].fcm_token, sRow[0].username, body, { type: 'extend_decision', decision, expiresAt: expiresAt ?? '', libraryItemId: rows[0].library_item_id })
     }
     return { ok: true, expiresAt }
   })
