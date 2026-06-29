@@ -64,6 +64,17 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
   async function saveUsername() {
     const trimmed = newUsername.trim()
     if (!trimmed || trimmed === username) return
+    Alert.alert(
+      'Rename username?',
+      `Change your username from "${username}" to "${trimmed}"?`,
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => {} },
+        { text: 'Confirm', onPress: () => doSaveUsername(trimmed) },
+      ]
+    )
+  }
+
+  async function doSaveUsername(trimmed) {
     setLoading(true)
     try {
       const { token, username: updated } = await api.patch('/users/me/username', { username: trimmed })
