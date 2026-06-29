@@ -21,6 +21,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
   const [joinedDate, setJoinedDate]       = useState('')
   const [loading, setLoading]             = useState(false)
   const [patternEnabled, setPatternEnabled] = useState(false)
+  const [passwordOpen, setPasswordOpen] = useState(false)
   const [biometricEnabled, setBiometricEnabled] = useState(false)
   const [biometricAvailable, setBiometricAvailable] = useState(false)
 
@@ -167,16 +168,23 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
 
       {/* Password section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Change Password</Text>
-        <TextInput style={styles.input} value={currentPassword} onChangeText={setCurrentPassword}
-          secureTextEntry placeholder="Current password" placeholderTextColor="#555" />
-        <TextInput style={styles.input} value={newPassword} onChangeText={setNewPassword}
-          secureTextEntry placeholder="New password (min. 8 chars)" placeholderTextColor="#555" />
-        <TextInput style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword}
-          secureTextEntry placeholder="Confirm new password" placeholderTextColor="#555" />
-        <TouchableOpacity style={styles.btn} onPress={savePassword} disabled={loading}>
-          <Text style={styles.btnText}>Save Password</Text>
+        <TouchableOpacity style={styles.collapseRow} onPress={() => setPasswordOpen(o => !o)}>
+          <Text style={styles.sectionTitle}>Change Password</Text>
+          <Text style={styles.chevron}>{passwordOpen ? '▲' : '▼'}</Text>
         </TouchableOpacity>
+        {passwordOpen && (
+          <>
+            <TextInput style={styles.input} value={currentPassword} onChangeText={setCurrentPassword}
+              secureTextEntry placeholder="Current password" placeholderTextColor="#555" />
+            <TextInput style={styles.input} value={newPassword} onChangeText={setNewPassword}
+              secureTextEntry placeholder="New password (min. 8 chars)" placeholderTextColor="#555" />
+            <TextInput style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword}
+              secureTextEntry placeholder="Confirm new password" placeholderTextColor="#555" />
+            <TouchableOpacity style={styles.btn} onPress={savePassword} disabled={loading}>
+              <Text style={styles.btnText}>Save Password</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       {loading && <ActivityIndicator color="#4f6ef7" style={{ marginTop: 8 }} />}
@@ -267,6 +275,8 @@ const styles = StyleSheet.create({
   joined:           { color: '#555', fontSize: 13, textAlign: 'center', marginBottom: 28 },
   section:          { marginBottom: 28 },
   sectionTitle:     { color: '#888', fontSize: 12, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
+  collapseRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  chevron:          { color: '#555', fontSize: 12, marginBottom: 12 },
   input:            { backgroundColor: '#1a1a1a', color: '#fff', borderRadius: 10, padding: 14, marginBottom: 10, fontSize: 15 },
   hint:             { color: '#444', fontSize: 12, marginBottom: 10, marginTop: -4 },
   btn:              { backgroundColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center' },
