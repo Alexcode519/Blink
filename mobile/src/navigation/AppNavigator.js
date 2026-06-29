@@ -46,6 +46,16 @@ export default function AppNavigator() {
   }, [])
 
   useEffect(() => {
+    // Notification tapped while app is in background (locked or running)
+    const unsub = messaging().onNotificationOpenedApp((remoteMessage) => {
+      if (remoteMessage?.data?.senderUsername) {
+        pendingChatRef.current = remoteMessage.data.senderUsername
+      }
+    })
+    return () => unsub()
+  }, [])
+
+  useEffect(() => {
     if (authState !== 'loggedIn') return
     const sub = AppState.addEventListener('change', async (next) => {
       if (appStateRef.current === 'active' && next === 'background') {
@@ -65,8 +75,11 @@ export default function AppNavigator() {
   function handlePatternSuccess() { setAuthState('loggedIn'); setupPushNotifications() }
   function handlePatternFallback() { setAuthState('locked') }
 
-  // Build initial state so the chat opens immediately after auth, with Chats behind it
+  // Consume pending chat so the next unlock doesn't re-open it
   const pendingSender = pendingChatRef.current
+  pendingChatRef.current = null
+
+  // Build initial state so the chat opens immediately after auth, with Chats behind it
   const loggedInInitialState = pendingSender ? {
     index: 1,
     routes: [
