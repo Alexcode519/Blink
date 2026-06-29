@@ -93,19 +93,7 @@ export default function AppNavigator() {
     ],
   } : undefined
 
-  if (authState === 'pattern') {
-    return (
-      <NavigationContainer key="pattern">
-        <Stack.Navigator screenOptions={screenOpts}>
-          <Stack.Screen name="PatternLogin">
-            {() => <PatternLoginScreen onSuccess={handlePatternSuccess} onFallback={handlePatternFallback} />}
-          </Stack.Screen>
-        </Stack.Navigator>
-      </NavigationContainer>
-    )
-  }
-
-  if (authState === 'locked') {
+  if (authState === 'pattern' || authState === 'locked') {
     return (
       <NavigationContainer key="locked">
         <Stack.Navigator screenOptions={screenOpts}>
