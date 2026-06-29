@@ -30,6 +30,7 @@ export default function ChatScreen({ route, navigation }) {
   const [recipientAvatar, setRecipientAvatar] = useState(null)
   const [saveRequest, setSaveRequest] = useState(null)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
   const [recipientStatus, setRecipientStatus] = useState(null) // { online, lastSeen, isTyping }
   const typingTimerRef = useRef(null)
   const pendingSaves = useRef({})
@@ -553,9 +554,14 @@ export default function ChatScreen({ route, navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Text style={styles.backText}>←</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => setShowMenu(v => !v)}>
+            <Icon name="more-vertical" size={20} color="#888" />
+          </TouchableOpacity>
+        </View>
         <View style={styles.headerCenter}>
           <View style={styles.headerAvatarRow}>
             {recipientAvatar
@@ -576,18 +582,24 @@ export default function ChatScreen({ route, navigation }) {
             </Text>
           )}
         </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => navigation.navigate('Library', { fromUsername: recipientUsername })}
-          >
-            <Icon name="feather" size={20} color="#4f6ef7" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={confirmDeleteConversation}>
-            <Icon name="trash-2" size={20} color="#ff4444" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={() => navigation.navigate('Library', { fromUsername: recipientUsername })}
+        >
+          <Icon name="feather" size={20} color="#4f6ef7" />
+        </TouchableOpacity>
       </View>
+
+      {showMenu && (
+        <Pressable style={styles.menuBackdrop} onPress={() => setShowMenu(false)}>
+          <View style={styles.dropdownMenu}>
+            <TouchableOpacity style={styles.dropdownItem} onPress={confirmDeleteConversation}>
+              <Icon name="trash-2" size={16} color="#ff4444" />
+              <Text style={styles.dropdownDelete}>Delete Chat</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      )}
 
       <FlatList
         ref={listRef}
@@ -671,7 +683,11 @@ const styles = StyleSheet.create({
   headerStatus:  { color: '#555', fontSize: 12, marginTop: 1 },
   headerTyping:  { color: '#4f6ef7' },
   backBtn:       { width: 36 },
-  headerActions: { flexDirection: 'row', alignItems: 'center' },
+  headerLeft:    { flexDirection: 'row', alignItems: 'center' },
+  menuBackdrop:  { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 },
+  dropdownMenu:  { position: 'absolute', top: 60, left: 16, backgroundColor: '#1e1e1e', borderRadius: 10, paddingVertical: 6, minWidth: 160, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 8, elevation: 8, zIndex: 101 },
+  dropdownItem:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
+  dropdownDelete:{ color: '#ff4444', fontSize: 15, fontWeight: '500' },
   backText:      { color: '#4f6ef7', fontSize: 22 },
   mineOuter:        { alignItems: 'flex-end', marginBottom: 6 },
   theirsOuter:      { alignItems: 'flex-start', marginBottom: 6 },
