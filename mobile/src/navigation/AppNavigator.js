@@ -74,6 +74,11 @@ export default function AppNavigator() {
   function handleLogout() { pendingChatRef.current = null; setAuthState('loggedOut') }
   function handlePatternSuccess() { setAuthState('loggedIn'); setupPushNotifications() }
   function handlePatternFallback() { setAuthState('locked') }
+  async function handleLock() {
+    const enabled = await AsyncStorage.getItem('blink_pattern_enabled')
+    const pattern = await AsyncStorage.getItem('blink_pattern')
+    setAuthState(enabled === 'true' && pattern ? 'pattern' : 'locked')
+  }
 
   // Consume pending chat so the next unlock doesn't re-open it
   const pendingSender = pendingChatRef.current
@@ -121,7 +126,7 @@ export default function AppNavigator() {
           <Stack.Screen name="Chat" component={ChatScreen} />
           <Stack.Screen name="Library" component={LibraryScreen} />
           <Stack.Screen name="Profile">
-            {props => <ProfileScreen {...props} onLogout={handleLogout} />}
+            {props => <ProfileScreen {...props} onLogout={handleLogout} onLock={handleLock} />}
           </Stack.Screen>
           <Stack.Screen name="SetPattern" component={SetPatternScreen} />
         </Stack.Navigator>

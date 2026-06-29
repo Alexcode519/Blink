@@ -10,7 +10,7 @@ import { api } from '../api/client'
 
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 
-export default function ProfileScreen({ navigation, onLogout }) {
+export default function ProfileScreen({ navigation, onLogout, onLock }) {
   const [username, setUsername]           = useState('')
   const [newUsername, setNewUsername]     = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
@@ -97,12 +97,16 @@ export default function ProfileScreen({ navigation, onLogout }) {
     }
   }
 
+  function handleLock() {
+    onLock()
+  }
+
   function handleLogout() {
-    Alert.alert('Log out', 'Are you sure you want to log out?', [
+    Alert.alert('Sign out', 'This will sign you out completely. You will need your password to sign back in.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Log out', style: 'destructive', onPress: () => {
-          AsyncStorage.clear().then(() => {
+        text: 'Sign out', style: 'destructive', onPress: () => {
+          AsyncStorage.multiRemove(['token', 'username']).then(() => {
             onLogout()
           })
         },
@@ -208,9 +212,12 @@ export default function ProfileScreen({ navigation, onLogout }) {
         )}
       </View>
 
-      {/* Logout */}
+      {/* Lock / Sign out */}
+      <TouchableOpacity style={styles.lockBtn} onPress={handleLock}>
+        <Text style={styles.lockText}>Lock App</Text>
+      </TouchableOpacity>
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Log Out</Text>
+        <Text style={styles.logoutText}>Sign Out</Text>
       </TouchableOpacity>
 
     </ScrollView>
@@ -240,6 +247,8 @@ const styles = StyleSheet.create({
   settingRow:       { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14 },
   settingLabel:     { color: '#fff', fontSize: 15, fontWeight: '500' },
   settingHint:      { color: '#555', fontSize: 12, marginTop: 2 },
+  lockBtn:          { borderWidth: 1, borderColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 12 },
+  lockText:         { color: '#4f6ef7', fontWeight: '600', fontSize: 15 },
   logoutBtn:        { borderWidth: 1, borderColor: '#ff4444', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 12 },
   logoutText:       { color: '#ff4444', fontWeight: '600', fontSize: 15 },
 })
