@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, Alert, Platform, Image, Modal, Pressable, PermissionsAndroid,
+  PanResponder, Animated,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker'
@@ -407,6 +408,33 @@ export default function ChatScreen({ route, navigation }) {
     return null
   }
 
+  function SwipeToDelete({ item, children }) {
+    const translateX = useRef(new Animated.Value(0)).current
+    const panResponder = useRef(PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderMove: (_, g) => {
+        if (g.dx < 0) translateX.setValue(Math.max(g.dx, -80))
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx < -60) {
+          Animated.timing(translateX, { toValue: -80, duration: 100, useNativeDriver: true }).start()
+          setTimeout(() => {
+            Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start()
+            confirmDeleteMessage(item)
+          }, 300)
+        } else {
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start()
+        }
+      },
+    })).current
+
+    return (
+      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+        {children}
+      </Animated.View>
+    )
+  }
+
   function confirmDeleteMessage(item) {
     Alert.alert(
       'Delete message?',
@@ -436,7 +464,7 @@ export default function ChatScreen({ route, navigation }) {
     const isDoc   = item.contentType === 'document'
     const canSave = !item.mine && (isImage || isVideo || isDoc)
 
-    return (
+    const bubble = (
       <View style={item.mine ? styles.mineOuter : styles.theirsOuter}>
         <View
           style={[styles.bubbleWrap, item.mine ? styles.mineWrap : styles.theirsWrap]}
@@ -499,6 +527,7 @@ export default function ChatScreen({ route, navigation }) {
         </View>
       </View>
     )
+    return item.mine ? <SwipeToDelete item={item}>{bubble}</SwipeToDelete> : bubble
   }
 
   return (
