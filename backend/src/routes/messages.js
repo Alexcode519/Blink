@@ -17,7 +17,7 @@ export async function messageRoutes(app) {
           recipientUsername: { type: 'string' },
           ciphertext:        { type: 'string' },
           nonce:             { type: 'string' },
-          contentType:       { type: 'string', enum: ['text', 'image', 'video', 'document'] },
+          contentType:       { type: 'string', enum: ['text', 'image', 'video', 'document', 'audio'] },
         },
       },
     },
@@ -49,7 +49,7 @@ export async function messageRoutes(app) {
     )
 
     // Send push notification to recipient if they have a token
-    const typeLabel = contentType === 'text' ? 'message' : contentType
+    const typeLabel = { text: 'message', image: 'image', video: 'video', document: 'document', audio: 'voice note' }[contentType] ?? contentType
     await sendPushNotification(
       recipient.fcm_token,
       senders[0]?.username ?? 'Someone',

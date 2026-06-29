@@ -244,7 +244,7 @@ export default function ChatScreen({ route, navigation }) {
     // Add a temporary message immediately so it appears without waiting for the server
     const tempId = `temp_${Date.now()}`
     let displayPayload = payload
-    if (contentType === 'image' || contentType === 'video') {
+    if (contentType === 'image' || contentType === 'video' || contentType === 'audio') {
       const ext = contentType === 'image' ? 'jpg' : 'mp4'
       const uri = await saveMediaFile(tempId, payload, ext)
       if (uri) displayPayload = uri
@@ -264,7 +264,7 @@ export default function ChatScreen({ route, navigation }) {
       const id = messageId ?? tempId
 
       // Rename local media file to final id
-      if (contentType === 'image' || contentType === 'video') {
+      if (contentType === 'image' || contentType === 'video' || contentType === 'audio') {
         const ext = contentType === 'image' ? 'jpg' : 'mp4'
         const finalUri = await saveMediaFile(id, payload, ext)
         if (finalUri) displayPayload = finalUri
