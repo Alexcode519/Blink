@@ -8,6 +8,8 @@ import { landingPage } from './web.js'
 import { userRoutes } from './routes/users.js'
 import { messageRoutes } from './routes/messages.js'
 
+console.log('ENV CHECK — JWT_SECRET present:', !!process.env.JWT_SECRET, '| DATABASE_URL present:', !!process.env.DATABASE_URL)
+
 const app = Fastify({
   logger: true,
   bodyLimit: 20 * 1024 * 1024, // 20MB to handle photo/video base64
