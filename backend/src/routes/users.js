@@ -141,6 +141,39 @@ export async function userRoutes(app) {
     return { ok: true }
   })
 
+  // Block a user
+  app.post('/users/block/:username', async (req, reply) => {
+    const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()])
+    if (!rows.length) return reply.code(404).send({ error: 'User not found' })
+    const blockedId = rows[0].id
+    if (blockedId === req.user.userId) return reply.code(400).send({ error: 'Cannot block yourself' })
+    await pool.query(
+      'INSERT INTO blocked_users (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [req.user.userId, blockedId]
+    )
+    return { ok: true }
+  })
+
+  // Unblock a user
+  app.delete('/users/block/:username', async (req, reply) => {
+    const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()])
+    if (!rows.length) return reply.code(404).send({ error: 'User not found' })
+    await pool.query(
+      'DELETE FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2',
+      [req.user.userId, rows[0].id]
+    )
+    return { ok: true }
+  })
+
+  // Get my blocked users list
+  app.get('/users/blocked', async (req) => {
+    const { rows } = await pool.query(
+      `SELECT u.username FROM blocked_users b JOIN users u ON u.id = b.blocked_id WHERE b.blocker_id = $1`,
+      [req.user.userId]
+    )
+    return { blocked: rows.map(r => r.username) }
+  })
+
   // Set typing indicator (expires after 4s)
   app.post('/users/typing/:recipientUsername', async (req, reply) => {
     const { rows } = await pool.query(

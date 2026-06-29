@@ -1,11 +1,20 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Alert, Pressable } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
-import Svg, { Path, Line, Circle, Polyline, Rect } from 'react-native-svg'
+import Svg, { Path, Line, Circle, Polyline, Rect, G } from 'react-native-svg'
 import RNFS from 'react-native-fs'
 import { api } from '../api/client'
 
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
+
+function BlockIcon() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="12" r="10" stroke="#ff8c00" strokeWidth="2" />
+      <Line x1="4.93" y1="4.93" x2="19.07" y2="19.07" stroke="#ff8c00" strokeWidth="2" strokeLinecap="round" />
+    </Svg>
+  )
+}
 
 function TrashIcon() {
   return (
@@ -68,6 +77,24 @@ export default function ChatsScreen({ navigation }) {
     return () => clearInterval(timer)
   }, [])
 
+  function blockUser(username) {
+    Alert.alert(
+      'Block user?',
+      `${username} won't be able to send you messages. You can unblock them from their profile.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Block', style: 'destructive', onPress: async () => {
+          try {
+            await api.post(`/users/block/${username}`)
+            Alert.alert('Blocked', `${username} has been blocked.`)
+          } catch (err) {
+            Alert.alert('Error', err.message)
+          }
+        }},
+      ]
+    )
+  }
+
   function deleteConversation(username) {
     Alert.alert('Delete chat', `Delete all messages with ${username}?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -110,6 +137,13 @@ export default function ChatsScreen({ navigation }) {
         {openMenu === u && (
           <Pressable style={styles.menuBackdrop} onPress={() => setOpenMenu(null)}>
             <View style={styles.dropdownMenu}>
+              <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenu(null); blockUser(u) }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <BlockIcon />
+                  <Text style={styles.dropdownBlock}>Block User</Text>
+                </View>
+              </TouchableOpacity>
+              <View style={styles.dropdownDivider} />
               <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenu(null); deleteConversation(u) }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <TrashIcon />
@@ -176,7 +210,9 @@ const styles = StyleSheet.create({
   menuBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 10 },
   dropdownMenu: { position: 'absolute', top: 44, right: 0, backgroundColor: '#1e1e1e', borderRadius: 10, paddingVertical: 6, minWidth: 150, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 8, elevation: 8, zIndex: 20 },
   dropdownItem: { paddingHorizontal: 16, paddingVertical: 12 },
-  dropdownDelete:{ color: '#ff4444', fontSize: 15, fontWeight: '500' },
+  dropdownDelete:  { color: '#ff4444', fontSize: 15, fontWeight: '500' },
+  dropdownBlock:   { color: '#ff8c00', fontSize: 15, fontWeight: '500' },
+  dropdownDivider: { height: 1, backgroundColor: '#2a2a2a', marginHorizontal: 12 },
   avatar:       { width: 44, height: 44, borderRadius: 22, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center' },
   avatarImg:    { width: 44, height: 44, borderRadius: 22 },
   avatarText:   { color: '#fff', fontSize: 18, fontWeight: '700' },

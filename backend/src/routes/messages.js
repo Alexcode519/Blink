@@ -30,6 +30,13 @@ export async function messageRoutes(app) {
     if (!recipients.length) return reply.code(404).send({ error: 'Recipient not found' })
 
     const recipient = recipients[0]
+
+    // Check if recipient has blocked sender
+    const { rows: blockCheck } = await pool.query(
+      'SELECT 1 FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2',
+      [recipient.id, req.user.userId]
+    )
+    if (blockCheck.length) return reply.code(403).send({ error: 'Message could not be delivered' })
     const { rows: senders } = await pool.query(
       'SELECT username FROM users WHERE id = $1',
       [req.user.userId]
