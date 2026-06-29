@@ -9,13 +9,17 @@ import { loadIndex, deleteItem } from '../library/storage'
 const COL = 3
 const SIZE = (Dimensions.get('window').width - 4) / COL
 
-export default function LibraryScreen({ navigation }) {
+export default function LibraryScreen({ navigation, route }) {
+  const fromUsername = route?.params?.fromUsername ?? null
   const [items, setItems] = useState([])
   const [preview, setPreview] = useState(null)
 
   useFocusEffect(useCallback(() => {
-    loadIndex().then(idx => setItems([...idx].reverse()))
-  }, []))
+    loadIndex().then(idx => {
+      const all = [...idx].reverse()
+      setItems(fromUsername ? all.filter(i => i.fromUsername === fromUsername) : all)
+    })
+  }, [fromUsername]))
 
   async function confirmDelete(id) {
     Alert.alert('Delete', 'Remove this from your library?', [
@@ -69,14 +73,14 @@ export default function LibraryScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>Library</Text>
+        <Text style={styles.header}>{fromUsername ? `${fromUsername}'s saves` : 'Library'}</Text>
         <View style={{ width: 60 }} />
       </View>
       {items.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🔒</Text>
           <Text style={styles.emptyText}>Nothing saved yet</Text>
-          <Text style={styles.emptyHint}>Files approved by senders appear here</Text>
+          <Text style={styles.emptyHint}>{fromUsername ? `No saves from ${fromUsername} yet` : 'Files approved by senders appear here'}</Text>
         </View>
       ) : (
         <FlatList

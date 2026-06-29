@@ -556,7 +556,12 @@ export default function ChatScreen({ route, navigation }) {
             </Text>
           )}
         </View>
-        <View style={styles.backBtn} />
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.navigate('Library', { fromUsername: recipientUsername })}
+        >
+          <Icon name="feather" size={20} color="#4f6ef7" />
+        </TouchableOpacity>
       </View>
 
       <FlatList
