@@ -213,12 +213,18 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
       </View>
 
       {/* Lock / Sign out */}
-      <TouchableOpacity style={styles.lockBtn} onPress={handleLock}>
-        <Text style={styles.lockText}>Lock App</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Sign Out</Text>
-      </TouchableOpacity>
+      {patternEnabled ? (
+        <>
+          <TouchableOpacity style={styles.lockBtn} onPress={handleLock}>
+            <Text style={styles.lockText}>Lock App</Text>
+          </TouchableOpacity>
+          <Text style={styles.signOutHint}>Disable pattern to enable Sign Out</Text>
+        </>
+      ) : (
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Text style={styles.logoutText}>Sign Out</Text>
+        </TouchableOpacity>
+      )}
 
     </ScrollView>
   )
@@ -249,6 +255,7 @@ const styles = StyleSheet.create({
   settingHint:      { color: '#555', fontSize: 12, marginTop: 2 },
   lockBtn:          { borderWidth: 1, borderColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 12 },
   lockText:         { color: '#4f6ef7', fontWeight: '600', fontSize: 15 },
+  signOutHint:      { color: '#444', fontSize: 12, textAlign: 'center', marginTop: 10 },
   logoutBtn:        { borderWidth: 1, borderColor: '#ff4444', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 12 },
   logoutText:       { color: '#ff4444', fontWeight: '600', fontSize: 15 },
 })
