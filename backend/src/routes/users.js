@@ -70,6 +70,20 @@ export async function userRoutes(app) {
   })
 
   // Update username
+  // Update own public key (called after reinstall when local key is missing)
+  app.patch('/users/me/public-key', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['publicKey'],
+        properties: { publicKey: { type: 'string' } },
+      },
+    },
+  }, async (req, reply) => {
+    await pool.query('UPDATE users SET public_key = $1 WHERE id = $2', [req.body.publicKey, req.user.userId])
+    return { ok: true }
+  })
+
   app.patch('/users/me/username', {
     schema: {
       body: {

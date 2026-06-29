@@ -4,6 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import Icon from 'react-native-vector-icons/Feather'
 import { api } from '../api/client'
 import { authenticateWithBiometric } from '../utils/biometrics'
+import { generateAndStoreKeyPair } from '../crypto/keys'
+import * as Keychain from 'react-native-keychain'
 import PatternLock from '../components/PatternLock'
 
 export default function LoginScreen({ navigation, onLogin, isLocked }) {
@@ -68,6 +70,13 @@ export default function LoginScreen({ navigation, onLogin, isLocked }) {
       })
       await AsyncStorage.setItem('token', token)
       await AsyncStorage.setItem('username', user)
+      // If private key was wiped (reinstall), generate new keys and upload
+      const existing = await Keychain.getGenericPassword({ service: 'blink_keypair' }).catch(() => null)
+      const backup = await AsyncStorage.getItem('blink_private_key_backup')
+      if (!existing && !backup) {
+        const { publicKey } = await generateAndStoreKeyPair()
+        await api.patch('/users/me/public-key', { publicKey })
+      }
       onLogin()
     } catch (err) {
       Alert.alert('Error', err.message)
