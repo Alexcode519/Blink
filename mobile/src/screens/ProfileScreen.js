@@ -170,7 +170,19 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
       <View style={styles.section}>
         <TouchableOpacity style={styles.collapseRow} onPress={() => setPasswordOpen(o => !o)}>
           <Text style={styles.sectionTitle}>Change Password</Text>
-          <Text style={styles.chevron}>{passwordOpen ? '▲' : '▼'}</Text>
+          <View style={styles.collapseRight}>
+            <TouchableOpacity
+              onPress={() => Alert.alert(
+                'Forgotten your password?',
+                'If you have forgotten your password you will need to sign out and create a new profile.',
+                [{ text: 'OK' }]
+              )}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.helpIcon}>?</Text>
+            </TouchableOpacity>
+            <Text style={styles.chevron}>{passwordOpen ? '▲' : '▼'}</Text>
+          </View>
         </TouchableOpacity>
         {passwordOpen && (
           <>
@@ -281,6 +293,8 @@ const styles = StyleSheet.create({
   section:          { marginBottom: 28 },
   sectionTitle:     { color: '#888', fontSize: 12, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
   collapseRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  collapseRight:    { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  helpIcon:         { color: '#fff', fontSize: 13, fontWeight: '700', backgroundColor: '#333', borderRadius: 10, width: 20, height: 20, textAlign: 'center', lineHeight: 20 },
   chevron:          { color: '#555', fontSize: 12, marginBottom: 12 },
   input:            { backgroundColor: '#1a1a1a', color: '#fff', borderRadius: 10, padding: 14, marginBottom: 10, fontSize: 15 },
   hint:             { color: '#444', fontSize: 12, marginBottom: 10, marginTop: -4 },
