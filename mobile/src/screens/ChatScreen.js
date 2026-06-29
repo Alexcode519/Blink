@@ -504,6 +504,8 @@ export default function ChatScreen({ route, navigation }) {
         keyExtractor={m => m.id}
         renderItem={({ item }) => renderBubble(item)}
         contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
+        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+        onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
       />
 
       <View style={styles.inputRow}>
@@ -520,7 +522,6 @@ export default function ChatScreen({ route, navigation }) {
           onSubmitEditing={sendText}
           returnKeyType="send"
           multiline
-          autoFocus
         />
         <TouchableOpacity onPress={sendText} style={styles.sendBtn}>
           <Text style={styles.sendText}>Send</Text>
