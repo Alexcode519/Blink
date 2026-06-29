@@ -74,20 +74,28 @@ export default function ChatsScreen({ navigation }) {
 
   function renderItem({ item }) {
     return (
-      <TouchableOpacity
-        style={styles.row}
-        onPress={() => navigation.navigate('Chat', {
-          recipientUsername: item.other_username,
-          recipientPublicKey: item.other_public_key,
-        })}
-        onLongPress={() => deleteConversation(item.other_username)}
-      >
-        {item.other_avatar
-          ? <Image source={{ uri: `data:image/jpeg;base64,${item.other_avatar}` }} style={styles.avatarImg} />
-          : <View style={styles.avatar}><Text style={styles.avatarText}>{item.other_username[0].toUpperCase()}</Text></View>
-        }
-        <Text style={styles.username}>{item.other_username}</Text>
-      </TouchableOpacity>
+      <View style={styles.row}>
+        <TouchableOpacity
+          style={styles.rowMain}
+          onPress={() => navigation.navigate('Chat', {
+            recipientUsername: item.other_username,
+            recipientPublicKey: item.other_public_key,
+          })}
+          onLongPress={() => deleteConversation(item.other_username)}
+        >
+          {item.other_avatar
+            ? <Image source={{ uri: `data:image/jpeg;base64,${item.other_avatar}` }} style={styles.avatarImg} />
+            : <View style={styles.avatar}><Text style={styles.avatarText}>{item.other_username[0].toUpperCase()}</Text></View>
+          }
+          <Text style={styles.username}>{item.other_username}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.chatLibBtn}
+          onPress={() => navigation.navigate('Library', { fromUsername: item.other_username })}
+        >
+          <FeatherIcon />
+        </TouchableOpacity>
+      </View>
     )
   }
 
@@ -137,7 +145,9 @@ const styles = StyleSheet.create({
   profileThumb: { width: 28, height: 28, borderRadius: 14 },
   newChat:      { marginHorizontal: 16, marginVertical: 12, backgroundColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center' },
   newChatText:  { color: '#fff', fontWeight: '600', fontSize: 15 },
-  row:          { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#1a1a1a', gap: 14 },
+  row:          { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
+  rowMain:      { flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 14 },
+  chatLibBtn:   { paddingHorizontal: 14, paddingVertical: 14 },
   avatar:       { width: 44, height: 44, borderRadius: 22, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center' },
   avatarImg:    { width: 44, height: 44, borderRadius: 22 },
   avatarText:   { color: '#fff', fontSize: 18, fontWeight: '700' },
