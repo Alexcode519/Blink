@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import messaging from '@react-native-firebase/messaging'
 import { setupPushNotifications } from '../notifications/setup'
+import { pickerGuard } from '../utils/pickerGuard'
 import RegisterScreen from '../screens/RegisterScreen'
 import LoginScreen from '../screens/LoginScreen'
 import ChatsScreen from '../screens/ChatsScreen'
@@ -57,19 +58,12 @@ export default function AppNavigator() {
 
   useEffect(() => {
     if (authState !== 'loggedIn') return
-    let lockTimer = null
     const sub = AppState.addEventListener('change', async (next) => {
       if (appStateRef.current === 'active' && next === 'background') {
-        // Grace period — pickers/system dialogs briefly background the app
-        lockTimer = setTimeout(async () => {
-          const enabled = await AsyncStorage.getItem('blink_pattern_enabled')
-          const pattern = await AsyncStorage.getItem('blink_pattern')
-          setAuthState(enabled === 'true' && pattern ? 'pattern' : 'locked')
-        }, 1500)
-      }
-      if (next === 'active' && lockTimer) {
-        clearTimeout(lockTimer)
-        lockTimer = null
+        if (pickerGuard.isActive()) { appStateRef.current = next; return }
+        const enabled = await AsyncStorage.getItem('blink_pattern_enabled')
+        const pattern = await AsyncStorage.getItem('blink_pattern')
+        setAuthState(enabled === 'true' && pattern ? 'pattern' : 'locked')
       }
       appStateRef.current = next
     })

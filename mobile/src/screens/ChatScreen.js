@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker'
+import { pickerGuard } from '../utils/pickerGuard'
 import RNFS from 'react-native-fs'
 import Video from 'react-native-video'
 import { saveToLibrary } from '../library/storage'
@@ -288,7 +289,9 @@ export default function ChatScreen({ route, navigation }) {
         return
       }
     }
+    pickerGuard.start()
     const result = await launchCamera({ mediaType: 'photo', includeBase64: true, quality: 0.4, maxWidth: 1280, maxHeight: 1280, saveToPhotos: false })
+    pickerGuard.end()
     if (result.didCancel || !result.assets?.[0]) return
     // Brief pause so the app fully resumes before accessing Keychain
     await new Promise(r => setTimeout(r, 500))
@@ -299,7 +302,9 @@ export default function ChatScreen({ route, navigation }) {
 
   async function pickPhoto() {
     setShowAttachMenu(false)
+    pickerGuard.start()
     const result = await launchImageLibrary({ mediaType: 'photo', includeBase64: true, quality: 0.4, maxWidth: 1280, maxHeight: 1280 })
+    pickerGuard.end()
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
     const base64 = asset.base64 ?? await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
@@ -308,7 +313,9 @@ export default function ChatScreen({ route, navigation }) {
 
   async function pickVideo() {
     setShowAttachMenu(false)
+    pickerGuard.start()
     const result = await launchImageLibrary({ mediaType: 'video', includeBase64: false })
+    pickerGuard.end()
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
     const base64 = await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
@@ -317,7 +324,9 @@ export default function ChatScreen({ route, navigation }) {
 
   async function pickDocument() {
     setShowAttachMenu(false)
+    pickerGuard.start()
     const result = await launchImageLibrary({ mediaType: 'mixed', includeBase64: false })
+    pickerGuard.end()
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
     const base64 = await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
