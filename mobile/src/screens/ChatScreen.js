@@ -38,6 +38,26 @@ export default function ChatScreen({ route, navigation }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMatchIndex, setSearchMatchIndex] = useState(0)
   const searchInputRef = useRef(null)
+  const dot1 = useRef(new Animated.Value(0)).current
+  const dot2 = useRef(new Animated.Value(0)).current
+  const dot3 = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    if (!recipientStatus?.isTyping) return
+    const pulse = (dot, delay) => Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(dot, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
+        Animated.delay(600 - delay),
+      ])
+    ).start()
+    pulse(dot1, 0)
+    pulse(dot2, 200)
+    pulse(dot3, 400)
+    return () => { dot1.stopAnimation(); dot2.stopAnimation(); dot3.stopAnimation() }
+  }, [recipientStatus?.isTyping])
+
   const [isRecording, setIsRecording] = useState(false)
   const [recordSecs, setRecordSecs] = useState(0)
   const recordSecsRef = useRef(0)
@@ -813,6 +833,20 @@ export default function ChatScreen({ route, navigation }) {
         onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
       />
 
+      {recipientStatus?.isTyping && (
+        <View style={styles.typingRow}>
+          {recipientAvatar
+            ? <Image source={{ uri: recipientAvatar }} style={styles.typingAvatar} />
+            : <View style={styles.typingAvatarPlaceholder}><Text style={styles.typingAvatarInitial}>{recipientUsername[0]?.toUpperCase()}</Text></View>
+          }
+          <View style={styles.typingBubble}>
+            {[dot1, dot2, dot3].map((dot, i) => (
+              <Animated.View key={i} style={[styles.typingDot, { opacity: dot, transform: [{ translateY: dot.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }] }]} />
+            ))}
+          </View>
+        </View>
+      )}
+
       {isRecording ? (
         <View style={styles.recordingBar}>
           <TouchableOpacity onPress={cancelRecording} style={styles.cancelRecBtn}>
@@ -905,6 +939,12 @@ const styles = StyleSheet.create({
   headerStatus:  { color: '#555', fontSize: 12, marginTop: 1 },
   headerTyping:  { color: '#4f6ef7' },
   backBtn:       { width: 36 },
+  typingRow:              { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
+  typingAvatar:           { width: 28, height: 28, borderRadius: 14 },
+  typingAvatarPlaceholder:{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#2a2a2a', alignItems: 'center', justifyContent: 'center' },
+  typingAvatarInitial:    { color: '#fff', fontSize: 12, fontWeight: '600' },
+  typingBubble:           { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1f1f1f', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 5 },
+  typingDot:              { width: 7, height: 7, borderRadius: 4, backgroundColor: '#888' },
   audioBubble:   { flexDirection: 'row', alignItems: 'center', gap: 8, width: 160 },
   audioLabel:    { color: '#ccc', fontSize: 14 },
   micBtn:        { padding: 8 },
