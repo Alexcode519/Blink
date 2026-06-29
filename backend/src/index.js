@@ -1,4 +1,6 @@
 import 'dotenv/config'
+process.on('uncaughtException', (err) => { console.error('UNCAUGHT:', err); process.exit(1) })
+process.on('unhandledRejection', (err) => { console.error('UNHANDLED:', err); process.exit(1) })
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
