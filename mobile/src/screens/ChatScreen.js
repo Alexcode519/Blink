@@ -314,8 +314,15 @@ export default function ChatScreen({ route, navigation }) {
 
   async function pickVideo() {
     setShowAttachMenu(false)
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA)
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert('Permission denied', 'Camera permission is required to record video.')
+        return
+      }
+    }
     pickerGuard.start()
-    const result = await launchImageLibrary({ mediaType: 'video', includeBase64: false })
+    const result = await launchCamera({ mediaType: 'video', videoQuality: 'high', includeBase64: false })
     pickerGuard.end()
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
