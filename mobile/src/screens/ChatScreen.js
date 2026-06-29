@@ -39,24 +39,20 @@ export default function ChatScreen({ route, navigation }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMatchIndex, setSearchMatchIndex] = useState(0)
   const searchInputRef = useRef(null)
-  const dot1 = useRef(new Animated.Value(0)).current
-  const dot2 = useRef(new Animated.Value(0)).current
-  const dot3 = useRef(new Animated.Value(0)).current
+  const wink = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
     if (!recipientStatus?.isTyping) return
-    const pulse = (dot, delay) => Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(dot, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
-        Animated.delay(600 - delay),
+        Animated.delay(1000),
+        Animated.timing(wink, { toValue: 1, duration: 120, useNativeDriver: true }),
+        Animated.timing(wink, { toValue: 0, duration: 120, useNativeDriver: true }),
+        Animated.delay(1200),
       ])
-    ).start()
-    pulse(dot1, 0)
-    pulse(dot2, 200)
-    pulse(dot3, 400)
-    return () => { dot1.stopAnimation(); dot2.stopAnimation(); dot3.stopAnimation() }
+    )
+    loop.start()
+    return () => { wink.stopAnimation(); wink.setValue(0) }
   }, [recipientStatus?.isTyping])
 
   const [isRecording, setIsRecording] = useState(false)
@@ -846,9 +842,15 @@ export default function ChatScreen({ route, navigation }) {
             : <View style={styles.typingAvatarPlaceholder}><Text style={styles.typingAvatarInitial}>{recipientUsername[0]?.toUpperCase()}</Text></View>
           }
           <View style={styles.typingBubble}>
-            {[dot1, dot2, dot3].map((dot, i) => (
-              <Animated.View key={i} style={[styles.typingDot, { opacity: dot, transform: [{ translateY: dot.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }] }]} />
-            ))}
+            <View style={styles.eye}><View style={styles.pupil} /></View>
+            <Animated.View
+              style={[
+                styles.eye,
+                { transform: [{ scaleY: wink.interpolate({ inputRange: [0, 1], outputRange: [1, 0.1] }) }] },
+              ]}
+            >
+              <View style={styles.pupil} />
+            </Animated.View>
           </View>
         </View>
       )}
@@ -949,8 +951,9 @@ const styles = StyleSheet.create({
   typingAvatar:           { width: 28, height: 28, borderRadius: 14 },
   typingAvatarPlaceholder:{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#2a2a2a', alignItems: 'center', justifyContent: 'center' },
   typingAvatarInitial:    { color: '#fff', fontSize: 12, fontWeight: '600' },
-  typingBubble:           { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1f1f1f', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 5 },
-  typingDot:              { width: 7, height: 7, borderRadius: 4, backgroundColor: '#888' },
+  typingBubble:           { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1f1f1f', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
+  eye:                    { width: 14, height: 14, borderRadius: 7, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  pupil:                  { width: 6, height: 6, borderRadius: 3, backgroundColor: '#222' },
   audioBubble:   { flexDirection: 'row', alignItems: 'center', gap: 8, width: 160 },
   audioLabel:    { color: '#ccc', fontSize: 14 },
   micBtn:        { padding: 8 },
