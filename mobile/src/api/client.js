@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-const BASE_URL = 'https://blink-production-412e.up.railway.app'
+const BASE_URL = 'https://creative-recreation-production-41a9.up.railway.app'
 
 async function request(method, path, body) {
   const token = await AsyncStorage.getItem('token')
