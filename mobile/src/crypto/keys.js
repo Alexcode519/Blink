@@ -59,5 +59,11 @@ export async function decryptFromSender(ciphertextB64, nonceB64, senderPublicKey
     privateKey
   )
   if (!decrypted) throw new Error('Decryption failed — key mismatch')
-  return decodeURIComponent(escape(String.fromCharCode(...decrypted)))
+  // Build string in chunks — spread operator hits max-arg limit on large payloads (e.g. voice notes)
+  const CHUNK = 4096
+  let str = ''
+  for (let i = 0; i < decrypted.length; i += CHUNK) {
+    str += String.fromCharCode(...decrypted.subarray(i, i + CHUNK))
+  }
+  return decodeURIComponent(escape(str))
 }
