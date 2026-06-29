@@ -38,7 +38,10 @@ export default function ChatScreen({ route, navigation }) {
   const searchInputRef = useRef(null)
   const [isRecording, setIsRecording] = useState(false)
   const [recordSecs, setRecordSecs] = useState(0)
+  const recordSecsRef = useRef(0)
   const [playingId, setPlayingId] = useState(null)
+  const [playbackPos, setPlaybackPos] = useState(0)   // current seconds
+  const [playbackDur, setPlaybackDur] = useState(0)   // total seconds
   const audioRecorder = useRef(new AudioRecorderPlayer()).current
   const typingTimerRef = useRef(null)
   const pendingSaves = useRef({})
@@ -181,7 +184,21 @@ export default function ChatScreen({ route, navigation }) {
           return { id: m.id, from: sender, payload, contentType, label, mine: true, status, createdAt: m.created_at }
         }
         try {
-          let payload = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKeyRef.current)
+          let keyToUse = recipientPublicKeyRef.current
+          let payload
+          try {
+            payload = await decryptFromSender(m.ciphertext, m.nonce, keyToUse)
+          } catch {
+            // Key may have changed — re-fetch and retry once
+            const fresh = await api.get(`/users/${recipientUsername}`)
+            if (fresh.publicKey && fresh.publicKey !== keyToUse) {
+              recipientPublicKeyRef.current = fresh.publicKey
+              keyToUse = fresh.publicKey
+              payload = await decryptFromSender(m.ciphertext, m.nonce, keyToUse)
+            } else {
+              throw new Error('key mismatch')
+            }
+          }
           const ct = m.content_type
           if (ct === 'image' || ct === 'video' || ct === 'audio') {
             const ext = ct === 'image' ? 'jpg' : ct === 'video' ? 'mp4' : 'mp4'
@@ -215,9 +232,22 @@ export default function ChatScreen({ route, navigation }) {
         incoming.map(async (m) => {
           const sender = m.senderusername ?? m.senderUsername ?? ''
           try {
-            let payload = await decryptFromSender(m.ciphertext, m.nonce, recipientPublicKeyRef.current)
+            let keyToUse = recipientPublicKeyRef.current
+            let payload
+            try {
+              payload = await decryptFromSender(m.ciphertext, m.nonce, keyToUse)
+            } catch {
+              const fresh = await api.get(`/users/${recipientUsername}`)
+              if (fresh.publicKey && fresh.publicKey !== keyToUse) {
+                recipientPublicKeyRef.current = fresh.publicKey
+                keyToUse = fresh.publicKey
+                payload = await decryptFromSender(m.ciphertext, m.nonce, keyToUse)
+              } else {
+                throw new Error('key mismatch')
+              }
+            }
             const ct = m.content_type
-            if (ct === 'image' || ct === 'video') {
+            if (ct === 'image' || ct === 'video' || ct === 'audio') {
               const ext = ct === 'image' ? 'jpg' : 'mp4'
               const uri = await saveMediaFile(m.id, payload, ext)
               if (uri) payload = uri
@@ -540,9 +570,12 @@ export default function ChatScreen({ route, navigation }) {
             )}
             {isAudio && (
               <TouchableOpacity style={styles.audioBubble} onPress={() => playAudio(item)}>
-                <Icon name={playingId === item.id ? 'pause-circle' : 'play-circle'} size={28} color="#4f6ef7" />
-                <Text style={styles.audioLabel}>Voice note</Text>
-                <Icon name="volume-2" size={14} color="#666" />
+                <Icon name={playingId === item.id ? 'pause-circle' : 'play-circle'} size={26} color={item.mine ? '#fff' : '#4f6ef7'} />
+                <Text style={styles.audioLabel}>
+                  {playingId === item.id
+                    ? `${formatSecs(playbackPos)} / ${formatSecs(playbackDur)}`
+                    : 'Voice note'}
+                </Text>
               </TouchableOpacity>
             )}
             {!isImage && !isVideo && !isDoc && !isAudio && (
@@ -589,9 +622,14 @@ export default function ChatScreen({ route, navigation }) {
       }
       setIsRecording(true)
       setRecordSecs(0)
+      recordSecsRef.current = 0
       const path = `${RNFS.CachesDirectoryPath}/blink_voice_${Date.now()}.mp4`
       await audioRecorder.startRecorder(path)
-      audioRecorder.addRecordBackListener(e => setRecordSecs(Math.floor(e.currentPosition / 1000)))
+      audioRecorder.addRecordBackListener(e => {
+        const s = Math.floor(e.currentPosition / 1000)
+        recordSecsRef.current = s
+        setRecordSecs(s)
+      })
     } catch (err) {
       setIsRecording(false)
       Alert.alert('Recording error', err.message)
@@ -605,8 +643,9 @@ export default function ChatScreen({ route, navigation }) {
       audioRecorder.removeRecordBackListener()
       setIsRecording(false)
       setRecordSecs(0)
-      if (recordSecs < 1) return // too short, discard
-      const base64 = await RNFS.readFile(path, 'base64')
+      if (recordSecsRef.current < 1) return // too short, discard
+      const cleanPath = path.replace('file://', '')
+      const base64 = await RNFS.readFile(cleanPath, 'base64')
       await sendPayload(base64, 'audio', path)
       RNFS.unlink(path).catch(() => {})
     } catch (err) {
@@ -637,12 +676,19 @@ export default function ChatScreen({ route, navigation }) {
       }
       const uri = item.payload.startsWith('file://') ? item.payload : `file://${item.payload}`
       setPlayingId(item.id)
+      setPlaybackPos(0)
+      setPlaybackDur(0)
       await audioRecorder.startPlayer(uri)
       audioRecorder.addPlayBackListener(e => {
-        if (e.currentPosition >= e.duration) {
+        const pos = Math.floor(e.currentPosition / 1000)
+        const dur = Math.floor(e.duration / 1000)
+        setPlaybackPos(pos)
+        setPlaybackDur(dur > 0 ? dur : 0)
+        if (e.currentPosition >= e.duration && e.duration > 0) {
           audioRecorder.stopPlayer().catch(() => {})
           audioRecorder.removePlayBackListener()
           setPlayingId(null)
+          setPlaybackPos(0)
         }
       })
     } catch (err) {
@@ -857,8 +903,8 @@ const styles = StyleSheet.create({
   headerStatus:  { color: '#555', fontSize: 12, marginTop: 1 },
   headerTyping:  { color: '#4f6ef7' },
   backBtn:       { width: 36 },
-  audioBubble:   { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
-  audioLabel:    { color: '#ccc', fontSize: 14, flex: 1 },
+  audioBubble:   { flexDirection: 'row', alignItems: 'center', gap: 8, width: 160 },
+  audioLabel:    { color: '#ccc', fontSize: 14 },
   micBtn:        { padding: 8 },
   recordingBar:  { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#1f1f1f', gap: 10 },
   cancelRecBtn:  { padding: 6 },
@@ -872,15 +918,15 @@ const styles = StyleSheet.create({
   searchNav:     { padding: 4 },
   searchHighlight: { backgroundColor: '#4f6ef750', color: '#fff', borderRadius: 3 },
   backText:      { color: '#4f6ef7', fontSize: 22 },
-  mineOuter:        { alignItems: 'flex-end', marginBottom: 6 },
-  theirsOuter:      { alignItems: 'flex-start', marginBottom: 6 },
-  bubbleWrap:       { flexDirection: 'row', alignItems: 'flex-end' },
+  mineOuter:        { width: '100%', alignItems: 'flex-end', marginBottom: 6 },
+  theirsOuter:      { width: '100%', alignItems: 'flex-start', marginBottom: 6 },
+  bubbleWrap:       { flexDirection: 'row', alignItems: 'flex-end', maxWidth: '88%' },
   mineWrap:         { justifyContent: 'flex-end' },
   theirsWrap:       { justifyContent: 'flex-start' },
   avatarThumb:      { width: 28, height: 28, borderRadius: 14, marginLeft: 6 },
   avatarPlaceholder:{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
   avatarInitial:    { color: '#fff', fontSize: 12, fontWeight: '700' },
-  bubble:        { maxWidth: '88%', borderRadius: 16, padding: 10 },
+  bubble:        { minWidth: 60, borderRadius: 16, padding: 10, flexShrink: 1 },
   mine:          { backgroundColor: '#4f6ef7' },
   theirs:        { backgroundColor: '#1f1f1f' },
   bubbleText:    { color: '#fff', fontSize: 15, lineHeight: 20 },
