@@ -9,6 +9,7 @@ import RNFS from 'react-native-fs'
 import { api } from '../api/client'
 import { isBiometricAvailable } from '../utils/biometrics'
 import { LANGUAGES, t } from '../i18n/translations'
+import { FONT_SIZES, useFontSize } from '../context/FontSizeContext'
 
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 
@@ -26,6 +27,8 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
   const [biometricEnabled, setBiometricEnabled] = useState(false)
   const [biometricAvailable, setBiometricAvailable] = useState(false)
   const [language, setLanguage] = useState('en')
+  const { fontSize, setFontSizeKey } = useFontSize()
+  const [fontSizeKey, setLocalFontSizeKey] = useState('medium')
   const [langModalOpen, setLangModalOpen] = useState(false)
 
   useEffect(() => {
@@ -37,6 +40,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
     AsyncStorage.getItem('blink_pattern_enabled').then(v => setPatternEnabled(v === 'true'))
     AsyncStorage.getItem('blink_biometric_enabled').then(v => setBiometricEnabled(v === 'true'))
     AsyncStorage.getItem('blink_language').then(v => { if (v) setLanguage(v) })
+    AsyncStorage.getItem('blink_font_size').then(v => { if (v) setLocalFontSizeKey(v) })
     isBiometricAvailable().then(({ available }) => setBiometricAvailable(available))
     api.get('/users/me/profile').then(p => {
       if (p.created_at) {
@@ -317,6 +321,24 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
         )}
       </View>
 
+      {/* Text size */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Text Size</Text>
+        <View style={styles.fontSizeRow}>
+          {FONT_SIZES.map(f => (
+            <TouchableOpacity
+              key={f.key}
+              style={[styles.fontSizeBtn, fontSizeKey === f.key && styles.fontSizeBtnActive]}
+              onPress={() => { setLocalFontSizeKey(f.key); setFontSizeKey(f.key) }}
+            >
+              <Text style={[styles.fontSizeLetter, { fontSize: f.size }, fontSizeKey === f.key && styles.fontSizeLetterActive]}>A</Text>
+              <Text style={[styles.fontSizeLabel, fontSizeKey === f.key && styles.fontSizeLabelActive]}>{f.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={[styles.fontSizePreview, { fontSize }]}>Preview: This is how your messages will look.</Text>
+      </View>
+
       {/* Help section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Help</Text>
@@ -388,6 +410,14 @@ const styles = StyleSheet.create({
   signOutHint:      { color: '#444', fontSize: 12, textAlign: 'center', marginTop: 10 },
   logoutBtn:        { borderWidth: 1, borderColor: '#ff4444', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 12 },
   logoutText:       { color: '#ff4444', fontWeight: '600', fontSize: 15 },
+  fontSizeRow:         { flexDirection: 'row', gap: 8 },
+  fontSizeBtn:         { flex: 1, alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 10, paddingVertical: 12, borderWidth: 1, borderColor: '#222' },
+  fontSizeBtnActive:   { borderColor: '#4f6ef7', backgroundColor: '#0d1a3a' },
+  fontSizeLetter:      { color: '#888', fontWeight: '700' },
+  fontSizeLetterActive:{ color: '#fff' },
+  fontSizeLabel:       { color: '#555', fontSize: 11, marginTop: 4 },
+  fontSizeLabelActive: { color: '#4f6ef7' },
+  fontSizePreview:     { color: '#555', marginTop: 14, lineHeight: 22 },
   helpRow:          { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14, gap: 12 },
   helpIcon2:        { fontSize: 20 },
   helpRowLabel:     { color: '#fff', fontSize: 15, fontWeight: '500' },

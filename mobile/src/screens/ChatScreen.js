@@ -5,6 +5,7 @@ import {
   PanResponder, Animated,
 } from 'react-native'
 import AudioRecorderPlayer from 'react-native-audio-recorder-player'
+import { useFontSize } from '../context/FontSizeContext'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker'
 import { pick, isCancel, types } from '@react-native-documents/picker'
@@ -25,6 +26,7 @@ const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 export default function ChatScreen({ route, navigation }) {
   const { recipientUsername, recipientPublicKey } = route.params
   const [messages, setMessages] = useState([])
+  const { fontSize } = useFontSize()
   const [text, setText] = useState('')
   const [myUsername, setMyUsername] = useState('')
   const [myAvatar, setMyAvatar] = useState(null)
@@ -579,13 +581,13 @@ export default function ChatScreen({ route, navigation }) {
               </TouchableOpacity>
             )}
             {!isImage && !isVideo && !isDoc && !isAudio && (
-              <Text style={styles.bubbleText}>
+              <Text style={[styles.bubbleText, { fontSize }]}>
                 {searchQuery.trim() && item.payload?.toLowerCase().includes(searchQuery.toLowerCase())
                   ? (() => {
                       const parts = item.payload.split(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
                       return parts.map((part, i) =>
                         part.toLowerCase() === searchQuery.toLowerCase()
-                          ? <Text key={i} style={styles.searchHighlight}>{part}</Text>
+                          ? <Text key={i} style={[styles.searchHighlight, { fontSize }]}>{part}</Text>
                           : part
                       )
                     })()
@@ -929,7 +931,7 @@ const styles = StyleSheet.create({
   bubble:        { minWidth: 60, borderRadius: 16, padding: 10, flexShrink: 1 },
   mine:          { backgroundColor: '#4f6ef7' },
   theirs:        { backgroundColor: '#1f1f1f' },
-  bubbleText:    { color: '#fff', fontSize: 15, lineHeight: 20 },
+  bubbleText:    { color: '#fff', lineHeight: 22 },
   saveBtn:       { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 },
   tickRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 2, marginRight: 4 },
   tickRowTheirs: { justifyContent: 'flex-start', marginLeft: 4 },
