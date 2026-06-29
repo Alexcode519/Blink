@@ -50,7 +50,6 @@ export default function ChatScreen({ route, navigation }) {
         setMessages(msgs)
         setTimeout(() => {
           listRef.current?.scrollToEnd({ animated: false })
-          inputRef.current?.focus()
         }, 150)
       }
     }).catch(() => {})
