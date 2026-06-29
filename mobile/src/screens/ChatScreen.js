@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker'
+import { pick, isCancel, types } from '@react-native-documents/picker'
 import { pickerGuard } from '../utils/pickerGuard'
 import RNFS from 'react-native-fs'
 import Video from 'react-native-video'
@@ -324,14 +325,19 @@ export default function ChatScreen({ route, navigation }) {
 
   async function pickDocument() {
     setShowAttachMenu(false)
-    pickerGuard.start()
-    const result = await launchImageLibrary({ mediaType: 'mixed', includeBase64: false })
-    pickerGuard.end()
-    if (result.didCancel || !result.assets?.[0]) return
-    const asset = result.assets[0]
-    const base64 = await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
-    const contentType = asset.type?.startsWith('image/') ? 'image' : asset.type?.startsWith('video/') ? 'video' : 'document'
-    await sendPayload(base64, contentType, asset.fileName ?? 'file')
+    try {
+      pickerGuard.start()
+      const [result] = await pick({ type: [types.allFiles], copyTo: 'cachesDirectory' })
+      pickerGuard.end()
+      const uri = (result.fileCopyUri ?? result.uri).replace('file://', '')
+      const base64 = await RNFS.readFile(uri, 'base64')
+      const mime = result.type ?? ''
+      const contentType = mime.startsWith('image/') ? 'image' : mime.startsWith('video/') ? 'video' : 'document'
+      await sendPayload(base64, contentType, result.name ?? 'file')
+    } catch (err) {
+      pickerGuard.end()
+      if (!isCancel(err)) Alert.alert('Error', err.message)
+    }
   }
 
   async function requestSave(message) {
