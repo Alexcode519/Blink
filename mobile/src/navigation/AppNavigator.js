@@ -76,9 +76,17 @@ export default function AppNavigator() {
 
   if (authState === null) return null
 
-  function handleLogin() { setAuthState('loggedIn'); setupPushNotifications() }
+  function handleLogin() {
+    wasBackgroundRef.current = false   // clear any stale background flag from before login
+    setAuthState('loggedIn')
+    setupPushNotifications()
+  }
   function handleLogout() { pendingChatRef.current = null; setAuthState('loggedOut') }
-  function handlePatternSuccess() { setAuthState('loggedIn'); setupPushNotifications() }
+  function handlePatternSuccess() {
+    wasBackgroundRef.current = false
+    setAuthState('loggedIn')
+    setupPushNotifications()
+  }
   function handlePatternFallback() { setAuthState('locked') }
   async function handleLock() {
     const enabled = await AsyncStorage.getItem('blink_pattern_enabled')
