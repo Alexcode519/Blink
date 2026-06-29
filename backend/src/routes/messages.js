@@ -42,6 +42,7 @@ export async function messageRoutes(app) {
     )
 
     // Send push notification to recipient if they have a token
+    console.log(`FCM token for ${recipientUsername}:`, recipient.fcm_token ? 'PRESENT' : 'NULL')
     const typeLabel = contentType === 'text' ? 'message' : contentType
     await sendPushNotification(
       recipient.fcm_token,
