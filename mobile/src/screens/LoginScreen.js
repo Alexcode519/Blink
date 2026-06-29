@@ -3,15 +3,30 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'reac
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Icon from 'react-native-vector-icons/Feather'
 import { api } from '../api/client'
+import { authenticateWithBiometric } from '../utils/biometrics'
 
 export default function LoginScreen({ navigation, onLogin, isLocked }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [biometricEnabled, setBiometricEnabled] = useState(false)
 
   useEffect(() => {
     AsyncStorage.getItem('username').then(u => { if (u) setUsername(u) })
+    if (isLocked) {
+      AsyncStorage.getItem('blink_biometric_enabled').then(val => {
+        if (val === 'true') {
+          setBiometricEnabled(true)
+          handleBiometric()
+        }
+      })
+    }
   }, [])
+
+  async function handleBiometric() {
+    const success = await authenticateWithBiometric()
+    if (success) onLogin()
+  }
 
   async function handleLogin() {
     if (!username.trim() || !password.trim()) return
@@ -47,6 +62,11 @@ export default function LoginScreen({ navigation, onLogin, isLocked }) {
       <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? 'Logging in…' : 'Log In'}</Text>
       </TouchableOpacity>
+      {isLocked && biometricEnabled && (
+        <TouchableOpacity style={styles.biometricBtn} onPress={handleBiometric}>
+          <Text style={styles.biometricText}>Use Biometrics</Text>
+        </TouchableOpacity>
+      )}
       {!isLocked && (
         <TouchableOpacity onPress={() => navigation.navigate('Register')}>
           <Text style={styles.link}>Don't have an account? Sign up</Text>
@@ -71,5 +91,7 @@ const styles = StyleSheet.create({
   input:       { backgroundColor: '#1a1a1a', color: '#fff', borderRadius: 10, padding: 14, marginBottom: 12, fontSize: 15 },
   button:      { backgroundColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 8 },
   buttonText:  { color: '#fff', fontWeight: '600', fontSize: 15 },
-  link:        { color: '#4f6ef7', textAlign: 'center', marginTop: 20, fontSize: 14 },
+  link:          { color: '#4f6ef7', textAlign: 'center', marginTop: 20, fontSize: 14 },
+  biometricBtn:  { marginTop: 16, paddingVertical: 12, paddingHorizontal: 32, borderRadius: 10, borderWidth: 1, borderColor: '#4f6ef7', alignItems: 'center' },
+  biometricText: { color: '#4f6ef7', fontSize: 15, fontWeight: '600' },
 })

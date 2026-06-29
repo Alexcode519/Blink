@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary } from 'react-native-image-picker'
 import RNFS from 'react-native-fs'
 import { api } from '../api/client'
+import { isBiometricAvailable } from '../utils/biometrics'
 
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 
@@ -20,6 +21,8 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
   const [joinedDate, setJoinedDate]       = useState('')
   const [loading, setLoading]             = useState(false)
   const [patternEnabled, setPatternEnabled] = useState(false)
+  const [biometricEnabled, setBiometricEnabled] = useState(false)
+  const [biometricAvailable, setBiometricAvailable] = useState(false)
 
   useEffect(() => {
     AsyncStorage.getItem('username').then(u => {
@@ -28,6 +31,8 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
     })
     loadAvatar()
     AsyncStorage.getItem('blink_pattern_enabled').then(v => setPatternEnabled(v === 'true'))
+    AsyncStorage.getItem('blink_biometric_enabled').then(v => setBiometricEnabled(v === 'true'))
+    isBiometricAvailable().then(({ available }) => setBiometricAvailable(available))
     api.get('/users/me/profile').then(p => {
       if (p.created_at) {
         setJoinedDate(new Date(p.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))
@@ -176,9 +181,28 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
 
       {loading && <ActivityIndicator color="#4f6ef7" style={{ marginTop: 8 }} />}
 
-      {/* Pattern lock section */}
+      {/* Security section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Security</Text>
+
+        {biometricAvailable && (
+          <View style={styles.settingRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingLabel}>Biometric Unlock</Text>
+              <Text style={styles.settingHint}>Fingerprint or face unlock</Text>
+            </View>
+            <Switch
+              value={biometricEnabled}
+              onValueChange={async (val) => {
+                await AsyncStorage.setItem('blink_biometric_enabled', val ? 'true' : 'false')
+                setBiometricEnabled(val)
+              }}
+              trackColor={{ false: '#333', true: '#4f6ef7' }}
+              thumbColor="#fff"
+            />
+          </View>
+        )}
+
         <View style={styles.settingRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.settingLabel}>Pattern Login</Text>
@@ -213,12 +237,12 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
       </View>
 
       {/* Lock / Sign out */}
-      {patternEnabled ? (
+      {(patternEnabled || biometricEnabled) ? (
         <>
           <TouchableOpacity style={styles.lockBtn} onPress={handleLock}>
             <Text style={styles.lockText}>Lock App</Text>
           </TouchableOpacity>
-          <Text style={styles.signOutHint}>Disable pattern to enable Sign Out</Text>
+          <Text style={styles.signOutHint}>Disable all security locks to enable Sign Out</Text>
         </>
       ) : (
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
