@@ -31,7 +31,6 @@ export async function displayMessageNotification(remoteMessage) {
         channelId: 'blink_messages',
         importance: AndroidImportance.HIGH,
         pressAction: { id: 'default' },
-        smallIcon: 'ic_notification',
       },
     })
   } catch (e) {

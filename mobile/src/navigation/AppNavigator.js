@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
+import { AppState } from 'react-native'
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -20,6 +21,7 @@ const screenOpts = { headerShown: false, contentStyle: { backgroundColor: '#0a0a
 export default function AppNavigator() {
   const [authState, setAuthState] = useState(null)
   const pendingChatRef = useRef(null)
+  const appStateRef = useRef(AppState.currentState)
 
   useEffect(() => {
     async function check() {
@@ -42,6 +44,19 @@ export default function AppNavigator() {
     }
     check()
   }, [])
+
+  useEffect(() => {
+    if (authState !== 'loggedIn') return
+    const sub = AppState.addEventListener('change', async (next) => {
+      if (appStateRef.current === 'active' && next === 'background') {
+        const enabled = await AsyncStorage.getItem('blink_pattern_enabled')
+        const pattern = await AsyncStorage.getItem('blink_pattern')
+        setAuthState(enabled === 'true' && pattern ? 'pattern' : 'locked')
+      }
+      appStateRef.current = next
+    })
+    return () => sub.remove()
+  }, [authState])
 
   if (authState === null) return null
 
