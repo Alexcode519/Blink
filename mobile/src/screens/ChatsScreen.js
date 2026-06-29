@@ -148,25 +148,6 @@ export default function ChatsScreen({ navigation }) {
         <TouchableOpacity style={styles.chatLibBtn} onPress={() => setOpenMenu(prev => prev === u ? null : u)}>
           <Text style={styles.dotsIcon}>⋮</Text>
         </TouchableOpacity>
-        {openMenu === u && (
-          <Pressable style={styles.menuBackdrop} onPress={() => setOpenMenu(null)}>
-            <View style={styles.dropdownMenu}>
-              <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenu(null); blockUser(u) }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <BlockIcon />
-                  <Text style={styles.dropdownBlock}>Block User</Text>
-                </View>
-              </TouchableOpacity>
-              <View style={styles.dropdownDivider} />
-              <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenu(null); deleteConversation(u) }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <TrashIcon />
-                  <Text style={styles.dropdownDelete}>Delete Chat</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        )}
       </View>
     )
   }
@@ -175,6 +156,25 @@ export default function ChatsScreen({ navigation }) {
     <View style={styles.container}>
       {extendRequest && (
         <ExtendRequestModal request={extendRequest} onDecide={handleExtendDecide} />
+      )}
+      {openMenu && (
+        <Pressable style={styles.menuBackdrop} onPress={() => setOpenMenu(null)}>
+          <View style={styles.dropdownMenu}>
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenu(null); blockUser(openMenu) }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <BlockIcon />
+                <Text style={styles.dropdownBlock}>Block User</Text>
+              </View>
+            </TouchableOpacity>
+            <View style={styles.dropdownDivider} />
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenu(null); deleteConversation(openMenu) }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <TrashIcon />
+                <Text style={styles.dropdownDelete}>Delete Chat</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
       )}
       <View style={styles.topRow}>
         <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
@@ -224,8 +224,8 @@ const styles = StyleSheet.create({
   rowMain:      { flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 14 },
   chatLibBtn:   { paddingHorizontal: 10, paddingVertical: 14 },
   dotsIcon:     { color: '#888', fontSize: 20, paddingHorizontal: 4 },
-  menuBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 10 },
-  dropdownMenu: { position: 'absolute', top: 44, right: 0, backgroundColor: '#1e1e1e', borderRadius: 10, paddingVertical: 6, minWidth: 150, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 8, elevation: 8, zIndex: 20 },
+  menuBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 },
+  dropdownMenu: { position: 'absolute', top: 120, right: 16, backgroundColor: '#1e1e1e', borderRadius: 10, paddingVertical: 6, minWidth: 160, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
   dropdownItem: { paddingHorizontal: 16, paddingVertical: 12 },
   dropdownDelete:  { color: '#ff4444', fontSize: 15, fontWeight: '500' },
   dropdownBlock:   { color: '#ff8c00', fontSize: 15, fontWeight: '500' },
