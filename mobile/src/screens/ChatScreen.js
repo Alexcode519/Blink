@@ -30,7 +30,11 @@ export default function ChatScreen({ route, navigation }) {
   const [recipientAvatar, setRecipientAvatar] = useState(null)
   const [saveRequest, setSaveRequest] = useState(null)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
-  const [recipientStatus, setRecipientStatus] = useState(null) // { online, lastSeen, isTyping }
+  const [recipientStatus, setRecipientStatus] = useState(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0)
+  const searchInputRef = useRef(null)
   const typingTimerRef = useRef(null)
   const pendingSaves = useRef({})
   const listRef  = useRef(null)
@@ -529,7 +533,18 @@ export default function ChatScreen({ route, navigation }) {
               </View>
             )}
             {!isImage && !isVideo && !isDoc && (
-              <Text style={styles.bubbleText}>{item.payload}</Text>
+              <Text style={styles.bubbleText}>
+                {searchQuery.trim() && item.payload?.toLowerCase().includes(searchQuery.toLowerCase())
+                  ? (() => {
+                      const parts = item.payload.split(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
+                      return parts.map((part, i) =>
+                        part.toLowerCase() === searchQuery.toLowerCase()
+                          ? <Text key={i} style={styles.searchHighlight}>{part}</Text>
+                          : part
+                      )
+                    })()
+                  : item.payload}
+              </Text>
             )}
             {canSave && (
               <TouchableOpacity onPress={() => requestSave(item)}>
@@ -548,6 +563,38 @@ export default function ChatScreen({ route, navigation }) {
       </View>
     )
     return item.mine ? <SwipeToDelete item={item}>{bubble}</SwipeToDelete> : bubble
+  }
+
+  const searchMatches = searchQuery.trim().length > 0
+    ? messages.reduce((acc, m, idx) => {
+        if (typeof m.payload === 'string' && m.payload.toLowerCase().includes(searchQuery.toLowerCase())) acc.push(idx)
+        return acc
+      }, [])
+    : []
+
+  function openSearch() {
+    setSearchOpen(true)
+    setSearchQuery('')
+    setSearchMatchIndex(0)
+    setTimeout(() => searchInputRef.current?.focus(), 100)
+  }
+
+  function closeSearch() {
+    setSearchOpen(false)
+    setSearchQuery('')
+    setSearchMatchIndex(0)
+  }
+
+  function onSearchChange(q) {
+    setSearchQuery(q)
+    setSearchMatchIndex(0)
+  }
+
+  function goToMatch(direction) {
+    if (!searchMatches.length) return
+    const next = (searchMatchIndex + direction + searchMatches.length) % searchMatches.length
+    setSearchMatchIndex(next)
+    listRef.current?.scrollToIndex({ index: searchMatches[next], animated: true, viewPosition: 0.5 })
   }
 
   return (
@@ -576,13 +623,46 @@ export default function ChatScreen({ route, navigation }) {
             </Text>
           )}
         </View>
-        <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={() => navigation.navigate('Library', { fromUsername: recipientUsername })}
-        >
-          <Icon name="feather" size={20} color="#4f6ef7" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity style={styles.iconBtn} onPress={openSearch}>
+            <Icon name="search" size={20} color="#888" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => navigation.navigate('Library', { fromUsername: recipientUsername })}
+          >
+            <Icon name="feather" size={20} color="#4f6ef7" />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {searchOpen && (
+        <View style={styles.searchBar}>
+          <TextInput
+            ref={searchInputRef}
+            style={styles.searchInput}
+            placeholder="Search messages…"
+            placeholderTextColor="#555"
+            value={searchQuery}
+            onChangeText={onSearchChange}
+            autoCapitalize="none"
+          />
+          {searchQuery.length > 0 && (
+            <Text style={styles.searchCount}>
+              {searchMatches.length === 0 ? '0 results' : `${searchMatchIndex + 1} / ${searchMatches.length}`}
+            </Text>
+          )}
+          <TouchableOpacity onPress={() => goToMatch(-1)} style={styles.searchNav} disabled={!searchMatches.length}>
+            <Icon name="chevron-up" size={18} color={searchMatches.length ? '#fff' : '#444'} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => goToMatch(1)} style={styles.searchNav} disabled={!searchMatches.length}>
+            <Icon name="chevron-down" size={18} color={searchMatches.length ? '#fff' : '#444'} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={closeSearch} style={styles.searchNav}>
+            <Icon name="x" size={18} color="#888" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       <FlatList
         ref={listRef}
@@ -666,6 +746,11 @@ const styles = StyleSheet.create({
   headerStatus:  { color: '#555', fontSize: 12, marginTop: 1 },
   headerTyping:  { color: '#4f6ef7' },
   backBtn:       { width: 36 },
+  searchBar:     { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1f1f1f', gap: 6 },
+  searchInput:   { flex: 1, color: '#fff', fontSize: 15, backgroundColor: '#1a1a1a', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  searchCount:   { color: '#888', fontSize: 13, minWidth: 56, textAlign: 'center' },
+  searchNav:     { padding: 4 },
+  searchHighlight: { backgroundColor: '#4f6ef750', color: '#fff', borderRadius: 3 },
   backText:      { color: '#4f6ef7', fontSize: 22 },
   mineOuter:        { alignItems: 'flex-end', marginBottom: 6 },
   theirsOuter:      { alignItems: 'flex-start', marginBottom: 6 },
