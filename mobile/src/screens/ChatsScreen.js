@@ -1,11 +1,22 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Alert, Pressable } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
-import Svg, { Path, Line, Circle } from 'react-native-svg'
+import Svg, { Path, Line, Circle, Polyline, Rect } from 'react-native-svg'
 import RNFS from 'react-native-fs'
 import { api } from '../api/client'
 
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
+
+function TrashIcon() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      <Polyline points="3 6 5 6 21 6" stroke="#ff4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="#ff4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M10 11v6M14 11v6" stroke="#ff4444" strokeWidth="2" strokeLinecap="round" />
+      <Path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="#ff4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  )
+}
 
 function FeatherIcon() {
   return (
@@ -100,7 +111,10 @@ export default function ChatsScreen({ navigation }) {
           <Pressable style={styles.menuBackdrop} onPress={() => setOpenMenu(null)}>
             <View style={styles.dropdownMenu}>
               <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenu(null); deleteConversation(u) }}>
-                <Text style={styles.dropdownDelete}>🗑 Delete Chat</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <TrashIcon />
+                  <Text style={styles.dropdownDelete}>Delete Chat</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </Pressable>
