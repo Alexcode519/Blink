@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Alert, ScrollView, Image, ActivityIndicator, Switch,
+  Alert, ScrollView, Image, ActivityIndicator, Switch, Modal, FlatList,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary } from 'react-native-image-picker'
 import RNFS from 'react-native-fs'
 import { api } from '../api/client'
 import { isBiometricAvailable } from '../utils/biometrics'
+import { LANGUAGES, t } from '../i18n/translations'
 
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 
@@ -24,6 +25,8 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [biometricEnabled, setBiometricEnabled] = useState(false)
   const [biometricAvailable, setBiometricAvailable] = useState(false)
+  const [language, setLanguage] = useState('en')
+  const [langModalOpen, setLangModalOpen] = useState(false)
 
   useEffect(() => {
     AsyncStorage.getItem('username').then(u => {
@@ -33,6 +36,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
     loadAvatar()
     AsyncStorage.getItem('blink_pattern_enabled').then(v => setPatternEnabled(v === 'true'))
     AsyncStorage.getItem('blink_biometric_enabled').then(v => setBiometricEnabled(v === 'true'))
+    AsyncStorage.getItem('blink_language').then(v => { if (v) setLanguage(v) })
     isBiometricAvailable().then(({ available }) => setBiometricAvailable(available))
     api.get('/users/me/profile').then(p => {
       if (p.created_at) {
@@ -132,13 +136,44 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
   }
 
   const initials = username ? username[0].toUpperCase() : '?'
+  const currentLang = LANGUAGES.find(l => l.code === language) ?? LANGUAGES[0]
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
+      {/* Language picker modal */}
+      <Modal visible={langModalOpen} transparent animationType="slide" onRequestClose={() => setLangModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t(language, 'selectLanguage')}</Text>
+            <FlatList
+              data={LANGUAGES}
+              keyExtractor={l => l.code}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.langRow, item.code === language && styles.langRowActive]}
+                  onPress={async () => {
+                    setLanguage(item.code)
+                    await AsyncStorage.setItem('blink_language', item.code)
+                    setLangModalOpen(false)
+                  }}
+                >
+                  <Text style={styles.langFlag}>{item.flag}</Text>
+                  <Text style={[styles.langName, item.code === language && styles.langNameActive]}>{item.name}</Text>
+                  {item.code === language && <Text style={styles.langCheck}>✓</Text>}
+                </TouchableOpacity>
+              )}
+            />
+            <TouchableOpacity style={styles.modalClose} onPress={() => setLangModalOpen(false)}>
+              <Text style={styles.modalCloseText}>{t(language, 'cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Back button */}
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-        <Text style={styles.backText}>← Back</Text>
+        <Text style={styles.backText}>{t(language, 'back')}</Text>
       </TouchableOpacity>
 
       {/* Avatar */}
@@ -158,7 +193,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
 
       {/* Username section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Username</Text>
+        <Text style={styles.sectionTitle}>{t(language, 'username')}</Text>
         <TextInput
           style={styles.input}
           value={newUsername}
@@ -173,7 +208,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
           onPress={saveUsername}
           disabled={loading || newUsername.trim() === username}
         >
-          <Text style={styles.btnText}>Save Username</Text>
+          <Text style={styles.btnText}>{t(language, 'saveUsername')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -212,15 +247,25 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
 
       {loading && <ActivityIndicator color="#4f6ef7" style={{ marginTop: 8 }} />}
 
+      {/* Language section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t(language, 'language')}</Text>
+        <TouchableOpacity style={styles.langSelector} onPress={() => setLangModalOpen(true)}>
+          <Text style={styles.langSelectorFlag}>{currentLang.flag}</Text>
+          <Text style={styles.langSelectorName}>{currentLang.name}</Text>
+          <Text style={styles.langSelectorChevron}>▼</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Security section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Security</Text>
+        <Text style={styles.sectionTitle}>{t(language, 'security')}</Text>
 
         <View style={styles.settingRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.settingLabel}>Biometric Unlock</Text>
+            <Text style={styles.settingLabel}>{t(language, 'biometric')}</Text>
             <Text style={styles.settingHint}>
-              {biometricAvailable ? 'Fingerprint or face unlock' : 'Not available on this device'}
+              {biometricAvailable ? t(language, 'biometricHint') : 'Not available on this device'}
             </Text>
           </View>
           <Switch
@@ -241,8 +286,8 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
 
         <View style={styles.settingRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.settingLabel}>Pattern Login</Text>
-            <Text style={styles.settingHint}>Unlock with a drawn pattern instead of password</Text>
+            <Text style={styles.settingLabel}>{t(language, 'patternLogin')}</Text>
+            <Text style={styles.settingHint}>{t(language, 'patternHint')}</Text>
           </View>
           <Switch
             value={patternEnabled}
@@ -267,7 +312,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
         {patternEnabled && (
           <TouchableOpacity style={[styles.btn, { marginTop: 10, backgroundColor: '#1a1a1a' }]}
             onPress={() => navigation.navigate('SetPattern')}>
-            <Text style={[styles.btnText, { color: '#4f6ef7' }]}>Change Pattern</Text>
+            <Text style={[styles.btnText, { color: '#4f6ef7' }]}>{t(language, 'changePattern')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -276,13 +321,13 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
       {(patternEnabled || biometricEnabled) ? (
         <>
           <TouchableOpacity style={styles.lockBtn} onPress={handleLock}>
-            <Text style={styles.lockText}>Lock App</Text>
+            <Text style={styles.lockText}>{t(language, 'lockApp')}</Text>
           </TouchableOpacity>
           <Text style={styles.signOutHint}>Disable all security locks to enable Sign Out</Text>
         </>
       ) : (
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Sign Out</Text>
+          <Text style={styles.logoutText}>{t(language, 'signOut')}</Text>
         </TouchableOpacity>
       )}
 
@@ -322,4 +367,19 @@ const styles = StyleSheet.create({
   signOutHint:      { color: '#444', fontSize: 12, textAlign: 'center', marginTop: 10 },
   logoutBtn:        { borderWidth: 1, borderColor: '#ff4444', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 12 },
   logoutText:       { color: '#ff4444', fontWeight: '600', fontSize: 15 },
+  langSelector:     { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14, gap: 12 },
+  langSelectorFlag: { fontSize: 22 },
+  langSelectorName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '500' },
+  langSelectorChevron: { color: '#555', fontSize: 12 },
+  modalOverlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  modalCard:        { backgroundColor: '#111', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 20, paddingBottom: 40, maxHeight: '80%' },
+  modalTitle:       { color: '#fff', fontSize: 17, fontWeight: '700', textAlign: 'center', marginBottom: 16, paddingHorizontal: 24 },
+  langRow:          { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 24, gap: 14 },
+  langRowActive:    { backgroundColor: '#1a2a4a' },
+  langFlag:         { fontSize: 24 },
+  langName:         { flex: 1, color: '#ccc', fontSize: 16 },
+  langNameActive:   { color: '#fff', fontWeight: '600' },
+  langCheck:        { color: '#4f6ef7', fontSize: 16, fontWeight: '700' },
+  modalClose:       { marginHorizontal: 24, marginTop: 12, backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14, alignItems: 'center' },
+  modalCloseText:   { color: '#888', fontWeight: '600', fontSize: 15 },
 })
