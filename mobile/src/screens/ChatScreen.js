@@ -181,7 +181,7 @@ export default function ChatScreen({ route, navigation }) {
           }
           return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at }
         } catch {
-          return { id: m.id, from: sender, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at }
+          return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at }
         }
       }))
       setMessages(prev => {
@@ -215,7 +215,7 @@ export default function ChatScreen({ route, navigation }) {
             }
             return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at }
           } catch {
-            return { id: m.id, from: sender, payload: '[Could not decrypt]', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at }
+            return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at }
           }
         })
       )
