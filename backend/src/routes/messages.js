@@ -169,31 +169,42 @@ export async function messageRoutes(app) {
       body: {
         type: 'object',
         required: ['decision'],
-        properties: { decision: { type: 'string', enum: ['approved', 'denied'] } },
+        properties: {
+          decision:    { type: 'string', enum: ['approved', 'denied'] },
+          expiresHours: { type: 'number', nullable: true },
+        },
       },
     },
   }, async (req, reply) => {
+    const { decision, expiresHours } = req.body
+    const expiresAt = decision === 'approved' && expiresHours
+      ? new Date(Date.now() + expiresHours * 60 * 60 * 1000).toISOString()
+      : null
+
     const { rows } = await pool.query(
-      `UPDATE save_requests sr SET status = $1
+      `UPDATE save_requests sr SET status = $1, expires_at = $4
        FROM messages m JOIN users u ON u.id = m.recipient_id
        WHERE sr.id = $2 AND sr.message_id = m.id AND m.sender_id = $3
        RETURNING sr.id, u.fcm_token, u.username AS recipientUsername`,
-      [req.body.decision, req.params.requestId, req.user.userId]
+      [decision, req.params.requestId, req.user.userId, expiresAt]
     )
     if (!rows.length) return reply.code(404).send({ error: 'Request not found' })
 
-    // Notify recipient of the decision
-    const label = req.body.decision === 'approved' ? 'approved ✓' : 'denied'
+    const label = decision === 'approved' ? 'approved ✓' : 'denied'
+    const bodyText = decision === 'approved'
+      ? expiresHours
+        ? `Your save request was approved — expires in ${expiresHours}h`
+        : 'Your save request was approved'
+      : 'Your save request was denied'
+
     await sendPushNotification(
       rows[0].fcm_token,
       'Save request ' + label,
-      req.body.decision === 'approved'
-        ? 'Your save request was approved'
-        : 'Your save request was denied',
-      { type: 'save_decision', decision: req.body.decision }
+      bodyText,
+      { type: 'save_decision', decision, expiresAt: expiresAt ?? '' }
     )
 
-    return { status: req.body.decision }
+    return { status: decision, expiresAt }
   })
 
   // Recipient marks all messages from a sender as read
@@ -256,12 +267,12 @@ export async function messageRoutes(app) {
   // Recipient polls for the outcome of their save request
   app.get('/messages/save-requests/:requestId/status', async (req, reply) => {
     const { rows } = await pool.query(
-      `SELECT sr.status FROM save_requests sr
+      `SELECT sr.status, sr.expires_at FROM save_requests sr
        JOIN messages m ON m.id = sr.message_id
        WHERE sr.id = $1 AND m.recipient_id = $2`,
       [req.params.requestId, req.user.userId]
     )
     if (!rows.length) return reply.code(404).send({ error: 'Not found' })
-    return { status: rows[0].status }
+    return { status: rows[0].status, expiresAt: rows[0].expires_at ?? null }
   })
 }

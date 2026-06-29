@@ -30,11 +30,26 @@ export default function LibraryScreen({ navigation }) {
     ])
   }
 
+  function expiryLabel(expiresAt) {
+    if (!expiresAt) return null
+    const diff = new Date(expiresAt).getTime() - Date.now()
+    if (diff <= 0) return 'Expired'
+    const h = Math.floor(diff / 3600000)
+    const m = Math.floor((diff % 3600000) / 60000)
+    return h > 0 ? `Expires in ${h}h ${m}m` : `Expires in ${m}m`
+  }
+
   function renderItem({ item }) {
+    const expiry = expiryLabel(item.expiresAt)
     if (item.contentType === 'image') {
       return (
-        <TouchableOpacity onPress={() => setPreview(item)} onLongPress={() => confirmDelete(item.id)}>
+        <TouchableOpacity onPress={() => setPreview(item)} onLongPress={() => confirmDelete(item.id)} style={{ position: 'relative' }}>
           <Image source={{ uri: `file://${item.path}` }} style={styles.thumb} />
+          {expiry && (
+            <View style={styles.expiryBadge}>
+              <Text style={styles.expiryText}>{expiry}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       )
     }
@@ -43,6 +58,7 @@ export default function LibraryScreen({ navigation }) {
         <Text style={styles.fileIcon}>{item.contentType === 'video' ? '🎥' : '📄'}</Text>
         <Text style={styles.fileName} numberOfLines={2}>{item.label}</Text>
         <Text style={styles.fileMeta}>{item.fromUsername}</Text>
+        {expiry && <Text style={styles.expiryText}>{expiry}</Text>}
       </TouchableOpacity>
     )
   }
@@ -102,6 +118,8 @@ const styles = StyleSheet.create({
   fileIcon:       { fontSize: 28, marginBottom: 4 },
   fileName:       { color: '#fff', fontSize: 11, textAlign: 'center' },
   fileMeta:       { color: '#666', fontSize: 10, marginTop: 2 },
+  expiryBadge:    { position: 'absolute', bottom: 4, left: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 4, paddingVertical: 2, paddingHorizontal: 4 },
+  expiryText:     { color: '#f90', fontSize: 9, fontWeight: '600', textAlign: 'center' },
   empty:          { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
   emptyIcon:      { fontSize: 48 },
   emptyText:      { color: '#fff', fontSize: 18, fontWeight: '600' },

@@ -113,10 +113,10 @@ export default function ChatScreen({ route, navigation }) {
     if (!entries.length) return
     for (const [messageId, info] of entries) {
       try {
-        const { status } = await api.get(`/messages/save-requests/${info.requestId}/status`)
+        const { status, expiresAt } = await api.get(`/messages/save-requests/${info.requestId}/status`)
         if (status === 'approved') {
           delete pendingSaves.current[messageId]
-          await saveToDevice(info.payload, info.contentType, info.label)
+          await saveToDevice(info.payload, info.contentType, info.label, expiresAt)
         } else if (status === 'denied') {
           delete pendingSaves.current[messageId]
           Alert.alert('Save denied', 'The sender did not allow saving this file.')
@@ -336,10 +336,13 @@ export default function ChatScreen({ route, navigation }) {
     }
   }
 
-  async function saveToDevice(payload, contentType, label) {
+  async function saveToDevice(payload, contentType, label, expiresAt) {
     try {
-      await saveToLibrary({ payload, contentType, label, fromUsername: recipientUsername })
-      Alert.alert('Saved', 'Added to your Blink Library.')
+      await saveToLibrary({ payload, contentType, label, fromUsername: recipientUsername, expiresAt: expiresAt ?? null })
+      const msg = expiresAt
+        ? `Added to your Blink Library. Expires ${new Date(expiresAt).toLocaleString()}.`
+        : 'Added to your Blink Library.'
+      Alert.alert('Saved', msg)
     } catch (err) {
       Alert.alert('Save failed', err.message)
     }
@@ -532,8 +535,8 @@ export default function ChatScreen({ route, navigation }) {
       {saveRequest && (
         <SaveRequestModal
           request={saveRequest}
-          onDecide={async (decision) => {
-            try { await api.patch(`/messages/save-requests/${saveRequest.id}`, { decision }) } catch {}
+          onDecide={async (decision, expiresHours) => {
+            try { await api.patch(`/messages/save-requests/${saveRequest.id}`, { decision, expiresHours }) } catch {}
             setSaveRequest(null)
           }}
         />
