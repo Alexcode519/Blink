@@ -91,7 +91,10 @@ export default function LibraryScreen({ navigation }) {
 
       {/* Full-screen image preview */}
       <Modal visible={!!preview} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
-        <Pressable style={styles.previewOverlay} onPress={() => setPreview(null)}>
+        <View style={styles.previewOverlay}>
+          <TouchableOpacity style={styles.previewBack} onPress={() => setPreview(null)}>
+            <Text style={styles.previewBackText}>← Back</Text>
+          </TouchableOpacity>
           {preview?.contentType === 'image' && (
             <Image source={{ uri: `file://${preview.path}` }} style={styles.previewImage} resizeMode="contain" />
           )}
@@ -101,7 +104,7 @@ export default function LibraryScreen({ navigation }) {
               <Text style={styles.deleteBtn}>Delete</Text>
             </TouchableOpacity>
           </View>
-        </Pressable>
+        </View>
       </Modal>
     </View>
   )
@@ -125,6 +128,8 @@ const styles = StyleSheet.create({
   emptyText:      { color: '#fff', fontSize: 18, fontWeight: '600' },
   emptyHint:      { color: '#555', fontSize: 14 },
   previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
+  previewBack:    { position: 'absolute', top: 48, left: 16, zIndex: 10, padding: 8 },
+  previewBackText:{ color: '#fff', fontSize: 16, fontWeight: '600' },
   previewImage:   { width: '100%', height: '80%' },
   previewMeta:    { position: 'absolute', bottom: 40, flexDirection: 'row', justifyContent: 'space-between', width: '80%' },
   previewFrom:    { color: '#888', fontSize: 14 },
