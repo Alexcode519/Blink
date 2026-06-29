@@ -244,6 +244,11 @@ export default function ChatScreen({ route, navigation }) {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
 
     try {
+      // Always fetch the latest public key before encrypting — recipient may have rekeyed
+      try {
+        const { publicKey } = await api.get(`/users/${recipientUsername}`)
+        if (publicKey) recipientPublicKeyRef.current = publicKey
+      } catch {}
       const { ciphertext, nonce } = await encryptForRecipient(payload, recipientPublicKeyRef.current)
       const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType })
       const id = messageId ?? tempId
