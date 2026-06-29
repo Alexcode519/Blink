@@ -193,23 +193,28 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Security</Text>
 
-        {biometricAvailable && (
-          <View style={styles.settingRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.settingLabel}>Biometric Unlock</Text>
-              <Text style={styles.settingHint}>Fingerprint or face unlock</Text>
-            </View>
-            <Switch
-              value={biometricEnabled}
-              onValueChange={async (val) => {
-                await AsyncStorage.setItem('blink_biometric_enabled', val ? 'true' : 'false')
-                setBiometricEnabled(val)
-              }}
-              trackColor={{ false: '#333', true: '#4f6ef7' }}
-              thumbColor="#fff"
-            />
+        <View style={styles.settingRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingLabel}>Biometric Unlock</Text>
+            <Text style={styles.settingHint}>
+              {biometricAvailable ? 'Fingerprint or face unlock' : 'Not available on this device'}
+            </Text>
           </View>
-        )}
+          <Switch
+            value={biometricEnabled}
+            disabled={!biometricAvailable}
+            onValueChange={async (val) => {
+              if (!biometricAvailable) {
+                Alert.alert('Not available', 'This device does not support biometric unlock.')
+                return
+              }
+              await AsyncStorage.setItem('blink_biometric_enabled', val ? 'true' : 'false')
+              setBiometricEnabled(val)
+            }}
+            trackColor={{ false: '#333', true: '#4f6ef7' }}
+            thumbColor="#fff"
+          />
+        </View>
 
         <View style={styles.settingRow}>
           <View style={{ flex: 1 }}>
