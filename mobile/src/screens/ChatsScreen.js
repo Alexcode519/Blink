@@ -53,6 +53,7 @@ export default function ChatsScreen({ navigation }) {
   const [loading, setLoading] = useState(true)
   const [avatarUri, setAvatarUri] = useState(null)
   const [openMenu, setOpenMenu] = useState(null)
+  const [openGroupMenu, setOpenGroupMenu] = useState(null)
   const [extendRequest, setExtendRequest] = useState(null) // pending extend request for sender to decide
   const isFocused = useRef(false)
 
@@ -116,6 +117,22 @@ export default function ChatsScreen({ navigation }) {
     )
   }
 
+  function leaveGroup(group) {
+    Alert.alert('Leave group?', `You'll no longer receive messages from ${group.name}.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Leave', style: 'destructive', onPress: async () => {
+          try {
+            await api.delete(`/groups/${group.id}/members/me`)
+            setGroups(prev => prev.filter(g => g.id !== group.id))
+          } catch (err) {
+            Alert.alert('Error', err.message)
+          }
+        }
+      },
+    ])
+  }
+
   function deleteConversation(username) {
     Alert.alert('Delete chat', `Delete all messages with ${username}?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -149,6 +166,9 @@ export default function ChatsScreen({ navigation }) {
             </View>
           )}
         </TouchableOpacity>
+        <TouchableOpacity style={styles.chatLibBtn} onPress={() => setOpenGroupMenu(prev => prev === item.id ? null : item.id)}>
+          <Text style={styles.dotsIcon}>⋮</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.chatLibBtn}
           onPress={() => navigation.navigate('Library', { fromGroupId: item.id, groupName: item.name })}
@@ -178,14 +198,14 @@ export default function ChatsScreen({ navigation }) {
             </View>
           )}
         </TouchableOpacity>
+        <TouchableOpacity style={styles.chatLibBtn} onPress={() => setOpenMenu(prev => prev === u ? null : u)}>
+          <Text style={styles.dotsIcon}>⋮</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.chatLibBtn}
           onPress={() => { setOpenMenu(null); navigation.navigate('Library', { fromUsername: u }) }}
         >
           <FeatherIcon />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.chatLibBtn} onPress={() => setOpenMenu(prev => prev === u ? null : u)}>
-          <Text style={styles.dotsIcon}>⋮</Text>
         </TouchableOpacity>
       </View>
     )
@@ -210,6 +230,39 @@ export default function ChatsScreen({ navigation }) {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <TrashIcon />
                 <Text style={styles.dropdownDelete}>Delete Chat</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      )}
+      {openGroupMenu && (
+        <Pressable style={styles.menuBackdrop} onPress={() => setOpenGroupMenu(null)}>
+          <View style={styles.dropdownMenu}>
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              onPress={() => {
+                const group = groups.find(g => g.id === openGroupMenu)
+                setOpenGroupMenu(null)
+                navigation.navigate('GroupInfo', { groupId: group.id, groupName: group.name })
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <PersonIcon />
+                <Text style={styles.dropdownBlock}>Group Info</Text>
+              </View>
+            </TouchableOpacity>
+            <View style={styles.dropdownDivider} />
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              onPress={() => {
+                const group = groups.find(g => g.id === openGroupMenu)
+                setOpenGroupMenu(null)
+                leaveGroup(group)
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <TrashIcon />
+                <Text style={styles.dropdownDelete}>Leave Group</Text>
               </View>
             </TouchableOpacity>
           </View>
