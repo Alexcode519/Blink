@@ -27,6 +27,7 @@ const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
 export default function ChatScreen({ route, navigation }) {
   const { recipientUsername, recipientPublicKey } = route.params
+  const [requested, setRequested] = useState(route.params?.requested ?? false)
   const [messages, setMessages] = useState([])
   const { fontSize } = useFontSize()
   const [text, setText] = useState('')
@@ -96,6 +97,9 @@ export default function ChatScreen({ route, navigation }) {
       .catch(() => {})
       .then(() => loadHistory())
       .finally(() => pollInbox())
+    api.get(`/messages/requests/${recipientUsername}/status`)
+      .then(({ requested: r }) => setRequested(!!r))
+      .catch(() => {})
     // Mark incoming messages as read and dismiss notification
     api.post(`/messages/read/${recipientUsername}`, {}).catch(() => {})
     notifee.cancelNotification(notifIdForSender(recipientUsername)).catch(() => {})
@@ -131,6 +135,35 @@ export default function ChatScreen({ route, navigation }) {
     if (typingTimerRef.current) return
     api.post(`/users/typing/${recipientUsername}`, {}).catch(() => {})
     typingTimerRef.current = setTimeout(() => { typingTimerRef.current = null }, 2000)
+  }
+
+  async function acceptRequest() {
+    try {
+      await api.post(`/messages/requests/${recipientUsername}/accept`)
+      setRequested(false)
+    } catch (e) {
+      Alert.alert('Error', e.message)
+    }
+  }
+
+  function declineRequest() {
+    Alert.alert(
+      'Decline request?',
+      `${recipientUsername} will be blocked and won't be able to message you again.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Decline', style: 'destructive', onPress: async () => {
+            try {
+              await api.post(`/users/block/${recipientUsername}`)
+              navigation.goBack()
+            } catch (e) {
+              Alert.alert('Error', e.message)
+            }
+          }
+        },
+      ]
+    )
   }
 
   const pollReadReceipts = useCallback(async () => {
@@ -347,6 +380,7 @@ export default function ChatScreen({ route, navigation }) {
   }, [recipientPublicKey])
 
   async function sendPayload(payload, contentType, label, replyTo = null) {
+    setRequested(false) // sending implicitly accepts the contact, mirrors backend behavior
     // Add a temporary message immediately so it appears without waiting for the server
     const tempId = `temp_${Date.now()}`
     let displayPayload = payload
@@ -993,7 +1027,21 @@ export default function ChatScreen({ route, navigation }) {
         </View>
       )}
 
-      {isRecording ? (
+      {requested ? (
+        <View style={styles.requestBar}>
+          <Text style={styles.requestBarText}>
+            <Text style={styles.bold}>{recipientUsername}</Text> isn't in your contacts. Accept to start replying.
+          </Text>
+          <View style={styles.requestBarBtns}>
+            <TouchableOpacity style={styles.requestDeclineBtn} onPress={declineRequest}>
+              <Text style={styles.requestDeclineText}>Decline</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.requestAcceptBtn} onPress={acceptRequest}>
+              <Text style={styles.requestAcceptText}>Accept</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : isRecording ? (
         <View style={styles.recordingBar}>
           <TouchableOpacity onPress={cancelRecording} style={styles.cancelRecBtn}>
             <Icon name="x" size={20} color="#ff4444" />
@@ -1161,6 +1209,14 @@ const styles = StyleSheet.create({
   mediaIcon:     { fontSize: 20 },
   mediaLabel:    { color: '#fff', fontSize: 14, flexShrink: 1 },
   inputRow:      { flexDirection: 'row', alignItems: 'flex-end', padding: 10, borderTopWidth: 1, borderTopColor: '#1f1f1f' },
+  requestBar:        { padding: 14, borderTopWidth: 1, borderTopColor: '#1f1f1f', backgroundColor: '#111' },
+  requestBarText:    { color: '#aaa', fontSize: 13, lineHeight: 19, marginBottom: 12 },
+  bold:              { color: '#fff', fontWeight: '600' },
+  requestBarBtns:    { flexDirection: 'row', gap: 10 },
+  requestDeclineBtn: { flex: 1, borderWidth: 1, borderColor: '#ff4444', borderRadius: 10, padding: 12, alignItems: 'center' },
+  requestDeclineText:{ color: '#ff4444', fontWeight: '600', fontSize: 14 },
+  requestAcceptBtn:  { flex: 1, backgroundColor: '#4f6ef7', borderRadius: 10, padding: 12, alignItems: 'center' },
+  requestAcceptText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   iconBtn:       { padding: 8, paddingBottom: 10 },
   iconText:      { fontSize: 20 },
   input:         { flex: 1, backgroundColor: '#1a1a1a', color: '#fff', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, marginHorizontal: 8, maxHeight: 100 },

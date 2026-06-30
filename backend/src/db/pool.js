@@ -27,6 +27,23 @@ pool.query(`CREATE TABLE IF NOT EXISTS extend_requests (
   expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 )`).then(() => console.log('extend_requests table ready')).catch(e => console.error('extend_requests migration failed:', e.message))
+pool.query(`CREATE TABLE IF NOT EXISTS accepted_contacts (
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  contact_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, contact_id)
+)`)
+  .then(() => console.log('accepted_contacts table ready'))
+  // Backfill: anyone who has ever sent a message to someone already implicitly
+  // "accepted" them — without this, every pre-existing conversation would
+  // suddenly look like a pending message request on first load.
+  .then(() => pool.query(`
+    INSERT INTO accepted_contacts (user_id, contact_id)
+    SELECT DISTINCT sender_id, recipient_id FROM messages
+    ON CONFLICT DO NOTHING
+  `))
+  .then(() => console.log('accepted_contacts backfilled from message history'))
+  .catch(e => console.error('accepted_contacts migration failed:', e.message))
 pool.query(`CREATE TABLE IF NOT EXISTS blocked_users (
   blocker_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   blocked_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

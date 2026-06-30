@@ -186,13 +186,18 @@ export default function ChatsScreen({ navigation }) {
       <View style={styles.row}>
         <TouchableOpacity
           style={styles.rowMain}
-          onPress={() => { setOpenMenu(null); navigation.navigate('Chat', { recipientUsername: u, recipientPublicKey: item.other_public_key }) }}
+          onPress={() => { setOpenMenu(null); navigation.navigate('Chat', { recipientUsername: u, recipientPublicKey: item.other_public_key, requested: item.requested }) }}
         >
           {item.other_avatar
             ? <Image source={{ uri: `data:image/jpeg;base64,${item.other_avatar}` }} style={styles.avatarImg} />
             : <View style={styles.avatar}><Text style={styles.avatarText}>{u[0].toUpperCase()}</Text></View>
           }
           <Text style={styles.username}>{u}</Text>
+          {item.requested && (
+            <View style={styles.requestBadge}>
+              <Text style={styles.requestBadgeText}>Request</Text>
+            </View>
+          )}
           {item.unread_count > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{item.unread_count > 99 ? '99+' : item.unread_count}</Text>
@@ -340,5 +345,7 @@ const styles = StyleSheet.create({
   username:     { color: '#fff', fontSize: 16, fontWeight: '500', flex: 1 },
   badge:        { backgroundColor: '#4f6ef7', borderRadius: 10, minWidth: 20, height: 20, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   badgeText:    { color: '#fff', fontSize: 11, fontWeight: '700' },
+  requestBadge:     { backgroundColor: '#ff8c0022', borderWidth: 1, borderColor: '#ff8c00', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 8 },
+  requestBadgeText: { color: '#ff8c00', fontSize: 10, fontWeight: '700' },
   hint:         { color: '#555', textAlign: 'center', marginTop: 60, fontSize: 15 },
 })

@@ -55,6 +55,13 @@ export async function messageRoutes(app) {
       [req.user.userId, recipient.id, ciphertext, nonce, contentType, replyToId ?? null, replyPreviewCiphertext ?? null, replyPreviewNonce ?? null, replySender ?? null]
     )
 
+    // Sending a message implicitly accepts that contact from the sender's
+    // side — clears the "message request" pending state if they reply.
+    await pool.query(
+      `INSERT INTO accepted_contacts (user_id, contact_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [req.user.userId, recipient.id]
+    )
+
     // Send push notification to recipient if they have a token
     const typeLabel = { text: 'message', image: 'image', video: 'video', document: 'document', audio: 'voice note' }[contentType] ?? contentType
     await sendPushNotification(
@@ -81,7 +88,10 @@ export async function messageRoutes(app) {
           WHERE um.sender_id = other_user
             AND um.recipient_id = $1
             AND um.read_at IS NULL
-        ) AS unread_count
+        ) AS unread_count,
+        NOT EXISTS (
+          SELECT 1 FROM accepted_contacts ac WHERE ac.user_id = $1 AND ac.contact_id = other_user
+        ) AS requested
        FROM (
          SELECT
            CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END AS other_user,
@@ -98,6 +108,34 @@ export async function messageRoutes(app) {
       [req.user.userId]
     )
     return { conversations: rows }
+  })
+
+  // Whether this contact is still a pending "message request" for the current user
+  app.get('/messages/requests/:username/status', async (req, reply) => {
+    const { rows: other } = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [req.params.username.toLowerCase()]
+    )
+    if (!other.length) return reply.code(404).send({ error: 'User not found' })
+    const { rows } = await pool.query(
+      'SELECT 1 FROM accepted_contacts WHERE user_id = $1 AND contact_id = $2',
+      [req.user.userId, other[0].id]
+    )
+    return { requested: !rows.length }
+  })
+
+  // Explicitly accept a message request without having to reply first
+  app.post('/messages/requests/:username/accept', async (req, reply) => {
+    const { rows: other } = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [req.params.username.toLowerCase()]
+    )
+    if (!other.length) return reply.code(404).send({ error: 'User not found' })
+    await pool.query(
+      'INSERT INTO accepted_contacts (user_id, contact_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [req.user.userId, other[0].id]
+    )
+    return { ok: true }
   })
 
   // Get full message history between current user and another user
