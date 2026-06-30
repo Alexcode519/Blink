@@ -42,6 +42,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
   const [disappearingEnabled, setDisappearingEnabled] = useState(false)
   const [disappearingHours, setDisappearingHours] = useState(null)
   const [disappearingDropdownOpen, setDisappearingDropdownOpen] = useState(false)
+  const [duressSet, setDuressSet] = useState(false)
 
   useEffect(() => {
     AsyncStorage.getItem('username').then(u => {
@@ -50,6 +51,10 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
     })
     loadAvatar()
     AsyncStorage.getItem('blink_pattern_enabled').then(v => setPatternEnabled(v === 'true'))
+    AsyncStorage.getItem('blink_duress_pattern').then(v => setDuressSet(!!v))
+    const unsub = navigation.addListener('focus', () => {
+      AsyncStorage.getItem('blink_duress_pattern').then(v => setDuressSet(!!v))
+    })
     AsyncStorage.getItem('blink_biometric_enabled').then(v => setBiometricEnabled(v === 'true'))
     AsyncStorage.getItem('blink_language').then(v => { if (v) setLanguage(v) })
     AsyncStorage.getItem('blink_font_size').then(v => { if (v) setLocalFontSizeKey(v) })
@@ -63,6 +68,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
         setDisappearingHours(p.disappearingHours)
       }
     }).catch(() => {})
+    return unsub
   }, [])
 
   async function setDisappearing(hours) {
@@ -405,8 +411,9 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
                   unsub()
                 })
               } else {
-                await AsyncStorage.multiRemove(['blink_pattern', 'blink_pattern_enabled'])
+                await AsyncStorage.multiRemove(['blink_pattern', 'blink_pattern_enabled', 'blink_duress_pattern'])
                 setPatternEnabled(false)
+                setDuressSet(false)
               }
             }}
             trackColor={{ false: '#333', true: '#4f6ef7' }}
@@ -418,6 +425,33 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
             onPress={() => navigation.navigate('SetPattern')}>
             <Text style={[styles.btnText, { color: '#4f6ef7' }]}>{t(language, 'changePattern')}</Text>
           </TouchableOpacity>
+        )}
+        {patternEnabled && (
+          <>
+            <Text style={[styles.settingHint, { marginTop: 14 }]}>
+              A duress pattern looks just like a normal unlock but silently wipes locally cached chats —
+              useful if you're ever forced to unlock the app.
+            </Text>
+            <TouchableOpacity
+              style={[styles.btn, { marginTop: 10, backgroundColor: '#1a1a1a' }]}
+              onPress={() => navigation.navigate('SetPattern', { mode: 'duress' })}
+            >
+              <Text style={[styles.btnText, { color: '#ff8c00' }]}>
+                {duressSet ? 'Change Duress Pattern' : 'Set Duress Pattern'}
+              </Text>
+            </TouchableOpacity>
+            {duressSet && (
+              <TouchableOpacity
+                style={{ marginTop: 10, alignItems: 'center' }}
+                onPress={async () => {
+                  await AsyncStorage.removeItem('blink_duress_pattern')
+                  setDuressSet(false)
+                }}
+              >
+                <Text style={{ color: '#666', fontSize: 13 }}>Remove duress pattern</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
       </View>
 

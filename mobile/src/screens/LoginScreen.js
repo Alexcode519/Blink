@@ -6,6 +6,7 @@ import { api } from '../api/client'
 import { authenticateWithBiometric } from '../utils/biometrics'
 import { generateAndStoreKeyPair } from '../crypto/keys'
 import PatternLock from '../components/PatternLock'
+import { panicWipe } from '../utils/panicWipe'
 
 export default function LoginScreen({ navigation, onLogin, isLocked }) {
   const [username, setUsername]         = useState('')
@@ -42,9 +43,16 @@ export default function LoginScreen({ navigation, onLogin, isLocked }) {
   }
 
   async function handlePattern(sequence) {
+    const seqStr = sequence.join('-')
+    const duress = await AsyncStorage.getItem('blink_duress_pattern')
+    if (duress && seqStr === duress) {
+      await panicWipe()
+      onLogin()
+      return
+    }
     const stored = await AsyncStorage.getItem('blink_pattern')
     if (!stored) { setMode('password'); return }
-    if (sequence.join('-') === stored) {
+    if (seqStr === stored) {
       onLogin()
     } else {
       const next = patternAttempts + 1

@@ -3,23 +3,40 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import PatternLock from '../components/PatternLock'
 
-export default function SetPatternScreen({ navigation }) {
+export default function SetPatternScreen({ navigation, route }) {
+  const isDuress = route?.params?.mode === 'duress'
   const [stage, setStage] = useState('draw')   // 'draw' | 'confirm'
   const [first, setFirst] = useState(null)
-  const [hint, setHint] = useState('Draw a pattern (connect at least 4 dots)')
+  const [hint, setHint] = useState(
+    isDuress ? 'Draw a duress pattern, different from your real one' : 'Draw a pattern (connect at least 4 dots)'
+  )
 
   async function handlePattern(sequence) {
     if (stage === 'draw') {
+      if (isDuress) {
+        const realPattern = await AsyncStorage.getItem('blink_pattern')
+        if (realPattern && sequence.join('-') === realPattern) {
+          setHint('That matches your real pattern — draw a different one')
+          return
+        }
+      }
       setFirst(sequence)
       setStage('confirm')
       setHint('Draw the same pattern again to confirm')
     } else {
       if (sequence.join('-') === first.join('-')) {
-        await AsyncStorage.setItem('blink_pattern', sequence.join('-'))
-        await AsyncStorage.setItem('blink_pattern_enabled', 'true')
-        Alert.alert('Pattern set', 'Pattern login is now enabled.', [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ])
+        if (isDuress) {
+          await AsyncStorage.setItem('blink_duress_pattern', sequence.join('-'))
+          Alert.alert('Duress pattern set', 'Drawing this pattern at the unlock screen will wipe locally cached chats and unlock normally, with no visible difference.', [
+            { text: 'OK', onPress: () => navigation.goBack() }
+          ])
+        } else {
+          await AsyncStorage.setItem('blink_pattern', sequence.join('-'))
+          await AsyncStorage.setItem('blink_pattern_enabled', 'true')
+          Alert.alert('Pattern set', 'Pattern login is now enabled.', [
+            { text: 'OK', onPress: () => navigation.goBack() }
+          ])
+        }
       } else {
         setFirst(null)
         setStage('draw')
@@ -40,7 +57,7 @@ export default function SetPatternScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Set Pattern</Text>
+      <Text style={styles.title}>{isDuress ? 'Set Duress Pattern' : 'Set Pattern'}</Text>
       <Text style={styles.subtitle}>{hint}</Text>
 
       <View style={styles.step}>
