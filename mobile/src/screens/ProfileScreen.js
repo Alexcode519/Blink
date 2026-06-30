@@ -301,9 +301,10 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
       <Text style={styles.displayName}>{username}</Text>
       {joinedDate ? <Text style={styles.joined}>Member since {joinedDate}</Text> : null}
 
-      {/* Username section */}
+      {/* Account section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t(language, 'username')}</Text>
+        <Text style={styles.sectionTitle}>Account</Text>
+
         <TextInput
           style={styles.input}
           value={newUsername}
@@ -314,18 +315,15 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
         />
         <Text style={styles.hint}>3–30 characters, letters/numbers/underscores only</Text>
         <TouchableOpacity
-          style={[styles.btn, newUsername.trim() === username && styles.btnDisabled]}
+          style={[styles.btn, newUsername.trim() === username && styles.btnDisabled, { marginBottom: 12 }]}
           onPress={saveUsername}
           disabled={loading || newUsername.trim() === username}
         >
           <Text style={styles.btnText}>{t(language, 'saveUsername')}</Text>
         </TouchableOpacity>
-      </View>
 
-      {/* Password section */}
-      <View style={styles.section}>
         <TouchableOpacity style={styles.collapseRow} onPress={() => setPasswordOpen(o => !o)}>
-          <Text style={styles.sectionTitle}>Change Password</Text>
+          <Text style={styles.settingLabel}>Change Password</Text>
           <View style={styles.collapseRight}>
             <TouchableOpacity
               onPress={() => Alert.alert(
@@ -357,19 +355,26 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
 
       {loading && <ActivityIndicator color="#4f6ef7" style={{ marginTop: 8 }} />}
 
-      {/* Language section */}
+      {/* Preferences section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t(language, 'language')}</Text>
-        <TouchableOpacity style={styles.langSelector} onPress={() => setLangModalOpen(true)}>
+        <Text style={styles.sectionTitle}>Preferences</Text>
+
+        <TouchableOpacity style={[styles.langSelector, { marginBottom: 12 }]} onPress={() => setLangModalOpen(true)}>
           <Text style={styles.langSelectorFlag}>{currentLang.flag}</Text>
           <Text style={styles.langSelectorName}>{currentLang.name}</Text>
           <Text style={styles.langSelectorChevron}>▼</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity style={styles.langSelector} onPress={() => setFontDropdownOpen(true)}>
+          <Text style={styles.langValue}>{FONT_SIZES.find(f => f.key === fontSizeKey)?.label ?? 'Medium'}</Text>
+          <Text style={styles.langChevron}>▼</Text>
+        </TouchableOpacity>
+        <Text style={[styles.fontSizePreview, { marginTop: 10, marginBottom: 0 }, { fontSize }]}>Preview: This is how your messages will look.</Text>
       </View>
 
-      {/* Security section */}
+      {/* Security & Privacy section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t(language, 'security')}</Text>
+        <Text style={styles.sectionTitle}>Security & Privacy</Text>
 
         <View style={styles.settingRow}>
           <View style={{ flex: 1 }}>
@@ -421,54 +426,42 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
           />
         </View>
         {patternEnabled && (
-          <TouchableOpacity style={[styles.btn, { marginTop: 10, backgroundColor: '#1a1a1a' }]}
-            onPress={() => navigation.navigate('SetPattern')}>
-            <Text style={[styles.btnText, { color: '#4f6ef7' }]}>{t(language, 'changePattern')}</Text>
-          </TouchableOpacity>
-        )}
-        {patternEnabled && (
-          <>
-            <Text style={[styles.settingHint, { marginTop: 14 }]}>
+          <View style={styles.settingSubRow}>
+            <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigation.navigate('SetPattern')}>
+              <Text style={[styles.secondaryBtnText, { color: '#4f6ef7' }]}>{t(language, 'changePattern')}</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.subtleHint}>
               A duress pattern looks just like a normal unlock but silently wipes locally cached chats —
               useful if you're ever forced to unlock the app.
             </Text>
             <TouchableOpacity
-              style={[styles.btn, { marginTop: 10, backgroundColor: '#1a1a1a' }]}
+              style={styles.secondaryBtn}
               onPress={() => navigation.navigate('SetPattern', { mode: 'duress' })}
             >
-              <Text style={[styles.btnText, { color: '#ff8c00' }]}>
+              <Text style={[styles.secondaryBtnText, { color: '#ff8c00' }]}>
                 {duressSet ? 'Change Duress Pattern' : 'Set Duress Pattern'}
               </Text>
             </TouchableOpacity>
             {duressSet && (
               <TouchableOpacity
-                style={{ marginTop: 10, alignItems: 'center' }}
+                style={styles.subtleLink}
                 onPress={async () => {
                   await AsyncStorage.removeItem('blink_duress_pattern')
                   setDuressSet(false)
                 }}
               >
-                <Text style={{ color: '#666', fontSize: 13 }}>Remove duress pattern</Text>
+                <Text style={styles.subtleLinkText}>Remove duress pattern</Text>
               </TouchableOpacity>
             )}
-          </>
+          </View>
         )}
-      </View>
 
-      {/* Text size */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Text Size</Text>
-        <TouchableOpacity style={styles.langSelector} onPress={() => setFontDropdownOpen(true)}>
-          <Text style={styles.langValue}>{FONT_SIZES.find(f => f.key === fontSizeKey)?.label ?? 'Medium'}</Text>
-          <Text style={styles.langChevron}>▼</Text>
-        </TouchableOpacity>
-        <Text style={[styles.fontSizePreview, { fontSize }]}>Preview: This is how your messages will look.</Text>
-      </View>
-
-      {/* Disappearing messages */}
-      <View style={styles.section}>
-        <View style={styles.rowBetween}>
-          <Text style={styles.sectionTitle}>Disappearing Messages</Text>
+        <View style={[styles.settingRow, { marginBottom: disappearingEnabled ? 12 : 0 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingLabel}>Disappearing Messages</Text>
+            <Text style={styles.settingHint}>Auto-delete messages after a set time</Text>
+          </View>
           <Switch
             value={disappearingEnabled}
             onValueChange={toggleDisappearing}
@@ -477,7 +470,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
           />
         </View>
         {disappearingEnabled && (
-          <TouchableOpacity style={[styles.langSelector, { marginTop: 10 }]} onPress={() => setDisappearingDropdownOpen(true)}>
+          <TouchableOpacity style={styles.langSelector} onPress={() => setDisappearingDropdownOpen(true)}>
             <Text style={styles.langValue}>{DISAPPEARING_OPTIONS.find(o => o.hours === disappearingHours)?.label ?? 'Never'}</Text>
             <Text style={styles.langChevron}>▼</Text>
           </TouchableOpacity>
@@ -487,7 +480,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
       {/* Help section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Help</Text>
-        <TouchableOpacity style={styles.helpRow} onPress={() => navigation.navigate('FAQ')}>
+        <TouchableOpacity style={[styles.helpRow, { marginBottom: 12 }]} onPress={() => navigation.navigate('FAQ')}>
           <Text style={styles.helpIcon2}>❓</Text>
           <View style={{ flex: 1 }}>
             <Text style={styles.helpRowLabel}>Frequently Asked Questions</Text>
@@ -495,7 +488,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
           </View>
           <Text style={styles.helpChevron}>›</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.helpRow, { marginTop: 10 }]} onPress={() => navigation.navigate('Feedback')}>
+        <TouchableOpacity style={styles.helpRow} onPress={() => navigation.navigate('Feedback')}>
           <Text style={styles.helpIcon2}>💬</Text>
           <View style={{ flex: 1 }}>
             <Text style={styles.helpRowLabel}>Send Feedback</Text>
@@ -536,7 +529,6 @@ const styles = StyleSheet.create({
   joined:           { color: '#555', fontSize: 13, textAlign: 'center', marginBottom: 28 },
   section:          { paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
   sectionTitle:     { color: '#888', fontSize: 12, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
-  rowBetween:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   collapseRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   collapseRight:    { flexDirection: 'row', alignItems: 'center', gap: 10 },
   helpIcon:         { color: '#fff', fontSize: 13, fontWeight: '700', backgroundColor: '#333', borderRadius: 10, width: 20, height: 20, textAlign: 'center', lineHeight: 20 },
@@ -551,6 +543,12 @@ const styles = StyleSheet.create({
   settingRow:       { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14, marginBottom: 12 },
   settingLabel:     { color: '#fff', fontSize: 15, fontWeight: '500' },
   settingHint:      { color: '#555', fontSize: 12, marginTop: 2 },
+  settingSubRow:    { marginTop: -2, marginBottom: 12 },
+  secondaryBtn:     { backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14, alignItems: 'center', marginBottom: 12 },
+  secondaryBtnText: { fontWeight: '600', fontSize: 15 },
+  subtleHint:       { color: '#555', fontSize: 12, lineHeight: 17, marginBottom: 12 },
+  subtleLink:       { alignItems: 'center', marginBottom: 4 },
+  subtleLinkText:   { color: '#666', fontSize: 13 },
   lockBtn:          { borderWidth: 1, borderColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 10 },
   lockText:         { color: '#4f6ef7', fontWeight: '600', fontSize: 15 },
   signOutHint:      { color: '#444', fontSize: 12, textAlign: 'center', marginTop: 10 },
