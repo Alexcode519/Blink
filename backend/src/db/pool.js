@@ -68,3 +68,29 @@ pool.query(`CREATE TABLE IF NOT EXISTS groups (
   content_type TEXT NOT NULL DEFAULT 'text',
   created_at   TIMESTAMPTZ DEFAULT NOW()
 )`).catch(e => console.error('group_messages migration failed:', e.message)))
+  .then(() => pool.query(`ALTER TABLE group_messages ADD COLUMN IF NOT EXISTS reply_to_id UUID REFERENCES group_messages(id) ON DELETE SET NULL`).catch(() => {}))
+  .then(() => pool.query(`ALTER TABLE group_messages ADD COLUMN IF NOT EXISTS reply_preview_ciphertext TEXT`).catch(() => {}))
+  .then(() => pool.query(`ALTER TABLE group_messages ADD COLUMN IF NOT EXISTS reply_preview_nonce TEXT`).catch(() => {}))
+  .then(() => pool.query(`ALTER TABLE group_messages ADD COLUMN IF NOT EXISTS reply_sender TEXT`).catch(() => {}))
+  .then(() => pool.query(`CREATE TABLE IF NOT EXISTS group_message_reactions (
+  message_id UUID NOT NULL REFERENCES group_messages(id) ON DELETE CASCADE,
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ciphertext TEXT NOT NULL,
+  nonce      TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (message_id, user_id)
+)`).catch(e => console.error('group_message_reactions migration failed:', e.message)))
+
+// 1:1 reply + reaction support
+pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id UUID REFERENCES messages(id) ON DELETE SET NULL`).catch(() => {})
+pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_preview_ciphertext TEXT`).catch(() => {})
+pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_preview_nonce TEXT`).catch(() => {})
+pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_sender TEXT`).catch(() => {})
+pool.query(`CREATE TABLE IF NOT EXISTS message_reactions (
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ciphertext TEXT NOT NULL,
+  nonce      TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (message_id, user_id)
+)`).catch(e => console.error('message_reactions migration failed:', e.message))

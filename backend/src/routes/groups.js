@@ -129,9 +129,10 @@ export async function groupRoutes(app) {
     if (!groupRows.length) return reply.code(404).send({ error: 'Group not found' })
 
     const { rows: memberRows } = await pool.query(
-      `SELECT u.username, u.public_key, gm.role
+      `SELECT u.username, u.public_key, gm.role, gr.last_read AS "lastRead"
          FROM group_members gm
          JOIN users u ON u.id = gm.user_id
+         LEFT JOIN group_reads gr ON gr.group_id = gm.group_id AND gr.user_id = gm.user_id
         WHERE gm.group_id = $1`,
       [groupId]
     )
@@ -156,7 +157,10 @@ export async function groupRoutes(app) {
     if (!mem.length) return reply.code(403).send({ error: 'Not a member' })
 
     const { rows } = await pool.query(
-      `SELECT gm.id, u.username AS sender_username, gm.ciphertext, gm.nonce, gm.content_type, gm.created_at
+      `SELECT gm.id, u.username AS sender_username, gm.ciphertext, gm.nonce, gm.content_type, gm.created_at,
+              gm.reply_to_id, gm.reply_preview_ciphertext, gm.reply_preview_nonce, gm.reply_sender,
+              (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', gmr.ciphertext, 'nonce', gmr.nonce)), '[]')
+                 FROM group_message_reactions gmr JOIN users ru ON ru.id = gmr.user_id WHERE gmr.message_id = gm.id) AS reactions
          FROM group_messages gm
          JOIN users u ON u.id = gm.sender_id
         WHERE gm.group_id = $1
@@ -183,15 +187,19 @@ export async function groupRoutes(app) {
         type: 'object',
         required: ['ciphertext', 'nonce', 'contentType'],
         properties: {
-          ciphertext:   { type: 'string' },
-          nonce:        { type: 'string' },
-          contentType:  { type: 'string', enum: ['text', 'image', 'video', 'document', 'audio'] },
+          ciphertext:             { type: 'string' },
+          nonce:                  { type: 'string' },
+          contentType:            { type: 'string', enum: ['text', 'image', 'video', 'document', 'audio'] },
+          replyToId:              { type: 'string', nullable: true },
+          replyPreviewCiphertext: { type: 'string', nullable: true },
+          replyPreviewNonce:      { type: 'string', nullable: true },
+          replySender:            { type: 'string', nullable: true },
         },
       },
     },
   }, async (req, reply) => {
     const { groupId } = req.params
-    const { ciphertext, nonce, contentType } = req.body
+    const { ciphertext, nonce, contentType, replyToId, replyPreviewCiphertext, replyPreviewNonce, replySender } = req.body
 
     const { rows: mem } = await pool.query(
       'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
@@ -206,9 +214,9 @@ export async function groupRoutes(app) {
     const senderUsername = senderRows[0]?.username ?? 'Someone'
 
     const { rows } = await pool.query(
-      `INSERT INTO group_messages (group_id, sender_id, ciphertext, nonce, content_type)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
-      [groupId, req.user.userId, ciphertext, nonce, contentType]
+      `INSERT INTO group_messages (group_id, sender_id, ciphertext, nonce, content_type, reply_to_id, reply_preview_ciphertext, reply_preview_nonce, reply_sender)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, created_at`,
+      [groupId, req.user.userId, ciphertext, nonce, contentType, replyToId ?? null, replyPreviewCiphertext ?? null, replyPreviewNonce ?? null, replySender ?? null]
     )
 
     // Get group name and notify all other members
@@ -244,7 +252,10 @@ export async function groupRoutes(app) {
     if (!mem.length) return reply.code(403).send({ error: 'Not a member' })
 
     const { rows } = await pool.query(
-      `SELECT gm.id, u.username AS sender_username, gm.ciphertext, gm.nonce, gm.content_type, gm.created_at
+      `SELECT gm.id, u.username AS sender_username, gm.ciphertext, gm.nonce, gm.content_type, gm.created_at,
+              gm.reply_to_id, gm.reply_preview_ciphertext, gm.reply_preview_nonce, gm.reply_sender,
+              (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', gmr.ciphertext, 'nonce', gmr.nonce)), '[]')
+                 FROM group_message_reactions gmr JOIN users ru ON ru.id = gmr.user_id WHERE gmr.message_id = gm.id) AS reactions
          FROM group_messages gm
          JOIN users u ON u.id = gm.sender_id
         WHERE gm.group_id = $1 AND gm.created_at > $2
@@ -262,6 +273,83 @@ export async function groupRoutes(app) {
     }
 
     return { messages: rows }
+  })
+
+  // Set (or replace) the current user's reaction on a group message
+  app.put('/groups/:groupId/messages/:messageId/reaction', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['ciphertext', 'nonce'],
+        properties: {
+          ciphertext: { type: 'string' },
+          nonce:      { type: 'string' },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const { groupId, messageId } = req.params
+    const { ciphertext, nonce } = req.body
+    const { rows: mem } = await pool.query(
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
+      [groupId, req.user.userId]
+    )
+    if (!mem.length) return reply.code(403).send({ error: 'Not a member' })
+    await pool.query(
+      `INSERT INTO group_message_reactions (message_id, user_id, ciphertext, nonce)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (message_id, user_id) DO UPDATE SET ciphertext = $3, nonce = $4, created_at = NOW()`,
+      [messageId, req.user.userId, ciphertext, nonce]
+    )
+    return { ok: true }
+  })
+
+  // Remove the current user's reaction on a group message
+  app.delete('/groups/:groupId/messages/:messageId/reaction', async (req, reply) => {
+    await pool.query(
+      'DELETE FROM group_message_reactions WHERE message_id = $1 AND user_id = $2',
+      [req.params.messageId, req.user.userId]
+    )
+    return { ok: true }
+  })
+
+  // Poll for reaction changes across the whole group
+  app.get('/groups/:groupId/reactions', async (req, reply) => {
+    const { groupId } = req.params
+    const { rows: mem } = await pool.query(
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
+      [groupId, req.user.userId]
+    )
+    if (!mem.length) return reply.code(403).send({ error: 'Not a member' })
+    const { rows } = await pool.query(
+      `SELECT gm.id AS message_id,
+              (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', gmr.ciphertext, 'nonce', gmr.nonce)), '[]')
+                 FROM group_message_reactions gmr JOIN users ru ON ru.id = gmr.user_id WHERE gmr.message_id = gm.id) AS reactions
+         FROM group_messages gm
+        WHERE gm.group_id = $1
+          AND EXISTS (SELECT 1 FROM group_message_reactions gmr2 WHERE gmr2.message_id = gm.id)`,
+      [groupId]
+    )
+    return { reactions: rows }
+  })
+
+  // Poll member read timestamps for "seen by" indicators
+  app.get('/groups/:groupId/reads', async (req, reply) => {
+    const { groupId } = req.params
+    const { rows: mem } = await pool.query(
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
+      [groupId, req.user.userId]
+    )
+    if (!mem.length) return reply.code(403).send({ error: 'Not a member' })
+    const { rows } = await pool.query(
+      `SELECT u.username, gr.last_read AS "lastRead"
+         FROM group_members gm
+         JOIN users u ON u.id = gm.user_id
+         LEFT JOIN group_reads gr ON gr.group_id = gm.group_id AND gr.user_id = gm.user_id
+        WHERE gm.group_id = $1`,
+      [groupId]
+    )
+    return { reads: rows }
   })
 
   // Add a member (admin only) — caller must supply the group key encrypted for the new member

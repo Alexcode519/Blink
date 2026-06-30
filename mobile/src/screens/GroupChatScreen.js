@@ -19,6 +19,7 @@ import { setActiveChat, clearActiveChat } from '../notifications/activeChat'
 import { notifIdForGroup } from '../notifications/setup'
 
 const POLL_INTERVAL = 3000
+const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
 export default function GroupChatScreen({ route, navigation }) {
   const { groupId, groupName: initName } = route.params
@@ -30,6 +31,9 @@ export default function GroupChatScreen({ route, navigation }) {
   const [members, setMembers]       = useState([])
   const [myUsername, setMyUsername] = useState('')
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [replyingTo, setReplyingTo] = useState(null)
+  const [showReactionPicker, setShowReactionPicker] = useState(null)
+  const [memberReads, setMemberReads] = useState({})
 
   const [isRecording, setIsRecording]   = useState(false)
   const [recordSecs, setRecordSecs]     = useState(0)
@@ -70,8 +74,12 @@ export default function GroupChatScreen({ route, navigation }) {
 
       await loadHistory()
       inboxTimer = setInterval(pollInbox, POLL_INTERVAL)
+      reactionTimer = setInterval(pollReactions, POLL_INTERVAL)
+      readsTimer = setInterval(pollReads, POLL_INTERVAL)
+      pollReads()
     }
 
+    let reactionTimer, readsTimer
     init()
     notifee.cancelNotification(notifIdForGroup(groupId)).catch(() => {})
     setActiveChat(`group:${groupId}`)
@@ -79,15 +87,53 @@ export default function GroupChatScreen({ route, navigation }) {
     const blurSub  = navigation.addListener('blur', () => clearActiveChat())
 
     return () => {
-      clearInterval(inboxTimer)
+      clearInterval(inboxTimer); clearInterval(reactionTimer); clearInterval(readsTimer)
       focusSub(); blurSub()
       clearActiveChat()
     }
   }, [])
 
+  const pollReads = useCallback(async () => {
+    try {
+      const { reads } = await api.get(`/groups/${groupId}/reads`)
+      const map = {}
+      for (const r of reads ?? []) if (r.lastRead) map[r.username] = r.lastRead
+      setMemberReads(map)
+    } catch {}
+  }, [groupId])
+
+  const pollReactions = useCallback(async () => {
+    if (!groupKeyRef.current) return
+    try {
+      const { reactions } = await api.get(`/groups/${groupId}/reactions`)
+      if (!reactions?.length) return
+      const decodedById = {}
+      for (const r of reactions) {
+        decodedById[r.message_id] = (r.reactions || []).map(rx => {
+          try {
+            return { username: rx.username, emoji: decryptWithGroupKey(rx.ciphertext, rx.nonce, groupKeyRef.current) }
+          } catch { return null }
+        }).filter(Boolean)
+      }
+      setMessages(prev => prev.map(m => decodedById[m.id] !== undefined ? { ...m, reactions: decodedById[m.id] } : m))
+    } catch {}
+  }, [groupId])
+
   // ── Decrypt a single raw message row ───────────────────────────────────────
   function decryptRow(m) {
     if (!groupKeyRef.current) return null
+    const reactions = (m.reactions || []).map(r => {
+      try {
+        return { username: r.username, emoji: decryptWithGroupKey(r.ciphertext, r.nonce, groupKeyRef.current) }
+      } catch { return null }
+    }).filter(Boolean)
+    let replyTo = null
+    if (m.reply_to_id && m.reply_preview_ciphertext) {
+      try {
+        const snippet = decryptWithGroupKey(m.reply_preview_ciphertext, m.reply_preview_nonce, groupKeyRef.current)
+        replyTo = { id: m.reply_to_id, sender: m.reply_sender, snippet }
+      } catch {}
+    }
     try {
       const payload = decryptWithGroupKey(m.ciphertext, m.nonce, groupKeyRef.current)
       const parsed  = JSON.parse(payload)
@@ -97,6 +143,7 @@ export default function GroupChatScreen({ route, navigation }) {
         mine:        m.sender_username === myUsername || false,
         contentType: m.content_type,
         createdAt:   m.created_at,
+        reactions, replyTo,
         ...parsed,
       }
     } catch {
@@ -107,6 +154,7 @@ export default function GroupChatScreen({ route, navigation }) {
         contentType: 'text',
         createdAt:   m.created_at,
         text:        '🔒 Encrypted message',
+        reactions, replyTo,
       }
     }
   }
@@ -146,12 +194,17 @@ export default function GroupChatScreen({ route, navigation }) {
   }, [groupId])
 
   // ── Send helpers ────────────────────────────────────────────────────────────
-  async function sendPayload(payload, contentType) {
+  async function sendPayload(payload, contentType, replyTo = null) {
     if (!groupKeyRef.current) return
     const { ciphertext, nonce } = encryptWithGroupKey(JSON.stringify(payload), groupKeyRef.current)
-    const { messageId, createdAt } = await api.post(`/groups/${groupId}/messages`, { ciphertext, nonce, contentType })
+    let replyFields = {}
+    if (replyTo) {
+      const { ciphertext: rc, nonce: rn } = encryptWithGroupKey(replyTo.snippet, groupKeyRef.current)
+      replyFields = { replyToId: replyTo.id, replyPreviewCiphertext: rc, replyPreviewNonce: rn, replySender: replyTo.sender }
+    }
+    const { messageId, createdAt } = await api.post(`/groups/${groupId}/messages`, { ciphertext, nonce, contentType, ...replyFields })
     const me = await AsyncStorage.getItem('username')
-    const newMsg = { id: messageId, sender: me, mine: true, contentType, createdAt, ...payload }
+    const newMsg = { id: messageId, sender: me, mine: true, contentType, createdAt, replyTo, reactions: [], ...payload }
     setMessages(prev => [...prev, newMsg])
     latestAtRef.current = createdAt
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
@@ -160,12 +213,61 @@ export default function GroupChatScreen({ route, navigation }) {
   async function sendText() {
     const t = text.trim()
     if (!t) return
+    const replyTo = replyingTo
     setText('')
+    setReplyingTo(null)
     try {
-      await sendPayload({ text: t }, 'text')
+      await sendPayload({ text: t }, 'text', replyTo)
     } catch (e) {
       Alert.alert('Error', e.message)
     }
+  }
+
+  function startReply(item) {
+    if (item.contentType !== 'text') {
+      Alert.alert('Cannot reply', 'You can only reply to text messages.')
+      return
+    }
+    setReplyingTo({ id: item.id, sender: item.mine ? myUsername : item.sender, snippet: (item.text ?? '').slice(0, 120) })
+    inputRef.current?.focus()
+  }
+
+  function showMessageActions(item) {
+    Alert.alert('Message', undefined, [
+      { text: 'Reply', onPress: () => startReply(item) },
+      { text: 'React', onPress: () => setShowReactionPicker(item.id) },
+      { text: 'Cancel', style: 'cancel' },
+    ])
+  }
+
+  async function setReaction(item, emoji) {
+    setShowReactionPicker(null)
+    try {
+      const { ciphertext, nonce } = encryptWithGroupKey(emoji, groupKeyRef.current)
+      await api.put(`/groups/${groupId}/messages/${item.id}/reaction`, { ciphertext, nonce })
+      setMessages(prev => prev.map(m => m.id === item.id
+        ? { ...m, reactions: [...(m.reactions || []).filter(r => r.username !== myUsername), { username: myUsername, emoji }] }
+        : m))
+    } catch (e) {
+      Alert.alert('Error', e.message)
+    }
+  }
+
+  async function removeReaction(item) {
+    try {
+      await api.delete(`/groups/${groupId}/messages/${item.id}/reaction`)
+      setMessages(prev => prev.map(m => m.id === item.id
+        ? { ...m, reactions: (m.reactions || []).filter(r => r.username !== myUsername) }
+        : m))
+    } catch (e) {
+      Alert.alert('Error', e.message)
+    }
+  }
+
+  function seenByCount(item) {
+    if (!item.mine || !item.createdAt) return 0
+    const t = new Date(item.createdAt).getTime()
+    return members.filter(mem => mem.username !== myUsername && memberReads[mem.username] && new Date(memberReads[mem.username]).getTime() >= t).length
   }
 
   // ── Attachments ─────────────────────────────────────────────────────────────
@@ -273,12 +375,21 @@ export default function GroupChatScreen({ route, navigation }) {
     const isVideo = item.contentType === 'video'
     const isDoc   = item.contentType === 'document'
 
+    const seen = seenByCount(item)
+
     return (
       <View style={item.mine ? styles.mineOuter : styles.theirsOuter}>
         <View style={styles.bubbleWrap}>
+          <TouchableOpacity activeOpacity={0.85} onLongPress={() => showMessageActions(item)} delayLongPress={400}>
           <View style={[styles.bubble, item.mine ? styles.mineBubble : styles.theirsBubble]}>
             {!item.mine && (
               <Text style={styles.senderLabel}>{item.sender}</Text>
+            )}
+            {item.replyTo && (
+              <View style={styles.replyQuote}>
+                <Text style={styles.replyQuoteSender}>{item.replyTo.sender}</Text>
+                <Text style={styles.replyQuoteText} numberOfLines={1}>{item.replyTo.snippet}</Text>
+              </View>
             )}
             {isAudio && (
               <TouchableOpacity style={styles.audioBubble} onPress={() => playAudio(item)}>
@@ -304,7 +415,27 @@ export default function GroupChatScreen({ route, navigation }) {
               {item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
             </Text>
           </View>
+          </TouchableOpacity>
         </View>
+        {!!item.reactions?.length && (
+          <View style={[styles.reactionRow, !item.mine && styles.reactionRowTheirs]}>
+            {Object.entries(item.reactions.reduce((acc, r) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc }, {})).map(([emoji, count]) => {
+              const isMine = item.reactions.some(r => r.emoji === emoji && r.username === myUsername)
+              return (
+                <TouchableOpacity
+                  key={emoji}
+                  style={[styles.reactionChip, isMine && styles.reactionChipMine]}
+                  onPress={() => (isMine ? removeReaction(item) : setReaction(item, emoji))}
+                >
+                  <Text style={styles.reactionChipText}>{emoji}{count > 1 ? ` ${count}` : ''}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        )}
+        {item.mine && seen > 0 && (
+          <Text style={styles.seenByText}>Seen by {seen}/{Math.max(members.length - 1, 1)}</Text>
+        )}
       </View>
     )
   }
@@ -374,6 +505,18 @@ export default function GroupChatScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
       ) : (
+        <>
+        {replyingTo && (
+          <View style={styles.replyBar}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.replyBarSender}>Replying to {replyingTo.sender}</Text>
+              <Text style={styles.replyBarText} numberOfLines={1}>{replyingTo.snippet}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.attachBtn}>
+              <Icon name="x" size={18} color="#888" />
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={styles.inputRow}>
           <TouchableOpacity style={styles.attachBtn} onPress={() => setShowAttachMenu(v => !v)}>
             <Icon name="paperclip" size={20} color="#888" />
@@ -397,7 +540,23 @@ export default function GroupChatScreen({ route, navigation }) {
             </TouchableOpacity>
           )}
         </View>
+        </>
       )}
+
+      <Modal transparent visible={!!showReactionPicker} animationType="fade" onRequestClose={() => setShowReactionPicker(null)}>
+        <Pressable style={styles.reactionOverlay} onPress={() => setShowReactionPicker(null)}>
+          <View style={styles.reactionPickerSheet}>
+            {EMOJIS.map(e => (
+              <TouchableOpacity key={e} onPress={() => {
+                const item = messages.find(m => m.id === showReactionPicker)
+                if (item) setReaction(item, e)
+              }}>
+                <Text style={styles.reactionPickerEmoji}>{e}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   )
 }
@@ -436,4 +595,19 @@ const styles = StyleSheet.create({
   attachMenu:         { position: 'absolute', bottom: 80, left: 12, backgroundColor: '#1e1e1e', borderRadius: 12, padding: 8, flexDirection: 'row', gap: 4, elevation: 8 },
   attachItem:         { alignItems: 'center', padding: 12, gap: 4 },
   attachLabel:        { color: '#fff', fontSize: 11 },
+  replyQuote:         { borderLeftWidth: 3, borderLeftColor: 'rgba(255,255,255,0.5)', paddingLeft: 8, marginBottom: 6 },
+  replyQuoteSender:   { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '700' },
+  replyQuoteText:     { color: 'rgba(255,255,255,0.65)', fontSize: 13 },
+  reactionRow:        { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2, justifyContent: 'flex-end' },
+  reactionRowTheirs:  { justifyContent: 'flex-start' },
+  reactionChip:       { backgroundColor: '#1f1f1f', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: '#2a2a2a' },
+  reactionChipMine:   { borderColor: '#4f6ef7' },
+  reactionChipText:   { color: '#fff', fontSize: 13 },
+  seenByText:         { color: '#555', fontSize: 11, marginTop: 2, alignSelf: 'flex-end' },
+  replyBar:           { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 14, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#1f1f1f' },
+  replyBarSender:     { color: '#4f6ef7', fontSize: 12, fontWeight: '700' },
+  replyBarText:       { color: '#888', fontSize: 13 },
+  reactionOverlay:     { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  reactionPickerSheet: { flexDirection: 'row', backgroundColor: '#1a1a1a', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 12, gap: 14, alignSelf: 'center', marginBottom: 100 },
+  reactionPickerEmoji: { fontSize: 28 },
 })

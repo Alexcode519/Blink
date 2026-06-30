@@ -23,6 +23,7 @@ import { setActiveChat, clearActiveChat } from '../notifications/activeChat'
 
 const POLL_INTERVAL = 3000
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
+const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
 export default function ChatScreen({ route, navigation }) {
   const { recipientUsername, recipientPublicKey } = route.params
@@ -38,6 +39,8 @@ export default function ChatScreen({ route, navigation }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMatchIndex, setSearchMatchIndex] = useState(0)
+  const [replyingTo, setReplyingTo] = useState(null)
+  const [showReactionPicker, setShowReactionPicker] = useState(null)
   const searchInputRef = useRef(null)
   const wink = useRef(new Animated.Value(0)).current
 
@@ -102,11 +105,12 @@ export default function ChatScreen({ route, navigation }) {
     const inboxTimer    = setInterval(pollInbox, POLL_INTERVAL)
     const senderTimer   = setInterval(pollSaveRequests, POLL_INTERVAL)
     const receiptTimer  = setInterval(pollReadReceipts, POLL_INTERVAL)
+    const reactionTimer = setInterval(pollReactions, POLL_INTERVAL)
     const statusTimer   = setInterval(pollStatus, 2000)
     pollStatus()
     return () => {
       clearInterval(inboxTimer); clearInterval(senderTimer)
-      clearInterval(receiptTimer); clearInterval(statusTimer)
+      clearInterval(receiptTimer); clearInterval(reactionTimer); clearInterval(statusTimer)
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
       focusSub(); blurSub()
       clearActiveChat()
@@ -145,6 +149,31 @@ export default function ChatScreen({ route, navigation }) {
       })
     } catch {}
   }, [recipientUsername])
+
+  const pollReactions = useCallback(async () => {
+    try {
+      const { reactions } = await api.get(`/messages/reactions/${recipientUsername}`)
+      if (!reactions?.length) return
+      const decodedById = {}
+      for (const r of reactions) {
+        decodedById[r.message_id] = (await Promise.all((r.reactions || []).map(async (rx) => {
+          try {
+            const emoji = await decryptFromSender(rx.ciphertext, rx.nonce, recipientPublicKeyRef.current)
+            return { username: rx.username, emoji }
+          } catch { return null }
+        }))).filter(Boolean)
+      }
+      setMessages(prev => {
+        let changed = false
+        const next = prev.map(m => {
+          if (decodedById[m.id] !== undefined) { changed = true; return { ...m, reactions: decodedById[m.id] } }
+          return m
+        })
+        if (changed) saveCache(next)
+        return changed ? next : prev
+      })
+    } catch {}
+  }, [recipientUsername, saveCache])
 
   const pollSaveRequests = useCallback(async () => {
     const entries = Object.entries(pendingSaves.current)
@@ -186,6 +215,26 @@ export default function ChatScreen({ route, navigation }) {
     AsyncStorage.setItem(CACHE_KEY, JSON.stringify(msgs)).catch(() => {})
   }, [CACHE_KEY])
 
+  const decodeExtras = useCallback(async (m) => {
+    let reactions = []
+    if (m.reactions?.length) {
+      reactions = (await Promise.all(m.reactions.map(async (r) => {
+        try {
+          const emoji = await decryptFromSender(r.ciphertext, r.nonce, recipientPublicKeyRef.current)
+          return { username: r.username, emoji }
+        } catch { return null }
+      }))).filter(Boolean)
+    }
+    let replyTo = null
+    if (m.reply_to_id && m.reply_preview_ciphertext) {
+      try {
+        const snippet = await decryptFromSender(m.reply_preview_ciphertext, m.reply_preview_nonce, recipientPublicKeyRef.current)
+        replyTo = { id: m.reply_to_id, sender: m.reply_sender, snippet }
+      } catch {}
+    }
+    return { reactions, replyTo }
+  }, [])
+
   const loadHistory = useCallback(async () => {
     try {
       const myUser = await AsyncStorage.getItem('username')
@@ -205,7 +254,8 @@ export default function ChatScreen({ route, navigation }) {
             ? JSON.parse(cached)
             : { payload: '[Sent]', contentType: m.content_type, label: null }
           const status = readSet.has(m.id) ? 'read' : 'delivered'
-          return { id: m.id, from: sender, payload, contentType, label, mine: true, status, createdAt: m.created_at }
+          const extras = await decodeExtras(m)
+          return { id: m.id, from: sender, payload, contentType, label, mine: true, status, createdAt: m.created_at, ...extras }
         }
         try {
           let keyToUse = recipientPublicKeyRef.current
@@ -229,7 +279,8 @@ export default function ChatScreen({ route, navigation }) {
             const uri = await saveMediaFile(m.id, payload, ext)
             if (uri) payload = uri
           }
-          return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at }
+          const extras = await decodeExtras(m)
+          return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at, ...extras }
         } catch (e) {
           return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at }
         }
@@ -244,7 +295,7 @@ export default function ChatScreen({ route, navigation }) {
       })
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 100)
     } catch {}
-  }, [recipientUsername, saveCache])
+  }, [recipientUsername, saveCache, decodeExtras])
 
   const pollInbox = useCallback(async () => {
     try {
@@ -276,7 +327,8 @@ export default function ChatScreen({ route, navigation }) {
               const uri = await saveMediaFile(m.id, payload, ext)
               if (uri) payload = uri
             }
-            return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at }
+            const extras = await decodeExtras(m)
+            return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at, ...extras }
           } catch (e) {
             return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at }
           }
@@ -294,7 +346,7 @@ export default function ChatScreen({ route, navigation }) {
     } catch {}
   }, [recipientPublicKey])
 
-  async function sendPayload(payload, contentType, label) {
+  async function sendPayload(payload, contentType, label, replyTo = null) {
     // Add a temporary message immediately so it appears without waiting for the server
     const tempId = `temp_${Date.now()}`
     let displayPayload = payload
@@ -303,7 +355,7 @@ export default function ChatScreen({ route, navigation }) {
       const uri = await saveMediaFile(tempId, payload, ext)
       if (uri) displayPayload = uri
     }
-    const tempMsg = { id: tempId, from: myUsername, payload: displayPayload, contentType, label, mine: true, status: 'sending', createdAt: new Date().toISOString() }
+    const tempMsg = { id: tempId, from: myUsername, payload: displayPayload, contentType, label, mine: true, status: 'sending', createdAt: new Date().toISOString(), replyTo }
     setMessages(prev => [...prev, tempMsg])
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
 
@@ -314,7 +366,12 @@ export default function ChatScreen({ route, navigation }) {
         if (publicKey) recipientPublicKeyRef.current = publicKey
       } catch {}
       const { ciphertext, nonce } = await encryptForRecipient(payload, recipientPublicKeyRef.current)
-      const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType })
+      let replyFields = {}
+      if (replyTo) {
+        const { ciphertext: rc, nonce: rn } = await encryptForRecipient(replyTo.snippet, recipientPublicKeyRef.current)
+        replyFields = { replyToId: replyTo.id, replyPreviewCiphertext: rc, replyPreviewNonce: rn, replySender: replyTo.sender }
+      }
+      const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType, ...replyFields })
       const id = messageId ?? tempId
 
       // Rename local media file to final id
@@ -345,8 +402,61 @@ export default function ChatScreen({ route, navigation }) {
   async function sendText() {
     if (!text.trim()) return
     const msg = text.trim()
+    const replyTo = replyingTo
     setText('')  // clear immediately so it feels instant
-    await sendPayload(msg, 'text')
+    setReplyingTo(null)
+    await sendPayload(msg, 'text', null, replyTo)
+  }
+
+  function startReply(item) {
+    if (item.contentType !== 'text') {
+      Alert.alert('Cannot reply', 'You can only reply to text messages.')
+      return
+    }
+    setReplyingTo({ id: item.id, sender: item.mine ? myUsername : item.from, snippet: item.payload.slice(0, 120) })
+    inputRef.current?.focus()
+  }
+
+  function showMessageActions(item) {
+    const buttons = [
+      { text: 'Reply', onPress: () => startReply(item) },
+      { text: 'React', onPress: () => setShowReactionPicker(item.id) },
+    ]
+    if (item.mine) buttons.push({ text: 'Delete', style: 'destructive', onPress: () => confirmDeleteMessage(item) })
+    buttons.push({ text: 'Cancel', style: 'cancel' })
+    Alert.alert('Message', undefined, buttons)
+  }
+
+  async function setReaction(item, emoji) {
+    setShowReactionPicker(null)
+    try {
+      const { ciphertext, nonce } = await encryptForRecipient(emoji, recipientPublicKeyRef.current)
+      await api.put(`/messages/${item.id}/reaction`, { ciphertext, nonce })
+      setMessages(prev => {
+        const next = prev.map(m => m.id === item.id
+          ? { ...m, reactions: [...(m.reactions || []).filter(r => r.username !== myUsername), { username: myUsername, emoji }] }
+          : m)
+        saveCache(next)
+        return next
+      })
+    } catch (err) {
+      Alert.alert('Error', err.message)
+    }
+  }
+
+  async function removeReaction(item) {
+    try {
+      await api.delete(`/messages/${item.id}/reaction`)
+      setMessages(prev => {
+        const next = prev.map(m => m.id === item.id
+          ? { ...m, reactions: (m.reactions || []).filter(r => r.username !== myUsername) }
+          : m)
+        saveCache(next)
+        return next
+      })
+    } catch (err) {
+      Alert.alert('Error', err.message)
+    }
   }
 
   async function takePhoto() {
@@ -566,10 +676,16 @@ export default function ChatScreen({ route, navigation }) {
           )}
           <TouchableOpacity
             activeOpacity={0.85}
-            onLongPress={item.mine ? () => confirmDeleteMessage(item) : undefined}
+            onLongPress={() => showMessageActions(item)}
             delayLongPress={400}
           >
           <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
+            {item.replyTo && (
+              <View style={styles.replyQuote}>
+                <Text style={styles.replyQuoteSender}>{item.replyTo.sender}</Text>
+                <Text style={styles.replyQuoteText} numberOfLines={1}>{item.replyTo.snippet}</Text>
+              </View>
+            )}
             {isImage && (
               <Image
                 source={{ uri: item.payload.startsWith('file://') ? item.payload : `data:image/jpeg;base64,${item.payload}` }}
@@ -624,6 +740,22 @@ export default function ChatScreen({ route, navigation }) {
           </View>
           </TouchableOpacity>
         </View>
+        {!!item.reactions?.length && (
+          <View style={[styles.reactionRow, !item.mine && styles.reactionRowTheirs]}>
+            {Object.entries(item.reactions.reduce((acc, r) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc }, {})).map(([emoji, count]) => {
+              const isMine = item.reactions.some(r => r.emoji === emoji && r.username === myUsername)
+              return (
+                <TouchableOpacity
+                  key={emoji}
+                  style={[styles.reactionChip, isMine && styles.reactionChipMine]}
+                  onPress={() => (isMine ? removeReaction(item) : setReaction(item, emoji))}
+                >
+                  <Text style={styles.reactionChipText}>{emoji}{count > 1 ? ` ${count}` : ''}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        )}
         <View style={[styles.tickRow, !item.mine && styles.tickRowTheirs]}>
           {!!item.createdAt && (
             <Text style={styles.timestamp}>{formatTime(item.createdAt)}</Text>
@@ -868,6 +1000,18 @@ export default function ChatScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
       ) : (
+        <>
+        {replyingTo && (
+          <View style={styles.replyBar}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.replyBarSender}>Replying to {replyingTo.sender}</Text>
+              <Text style={styles.replyBarText} numberOfLines={1}>{replyingTo.snippet}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.iconBtn}>
+              <Icon name="x" size={18} color="#888" />
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={styles.inputRow}>
           <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={styles.iconBtn}>
             <Icon name="paperclip" size={22} color="#888" />
@@ -893,7 +1037,23 @@ export default function ChatScreen({ route, navigation }) {
             </TouchableOpacity>
           )}
         </View>
+        </>
       )}
+
+      <Modal transparent visible={!!showReactionPicker} animationType="fade" onRequestClose={() => setShowReactionPicker(null)}>
+        <Pressable style={styles.menuOverlay} onPress={() => setShowReactionPicker(null)}>
+          <View style={styles.reactionPickerSheet}>
+            {EMOJIS.map(e => (
+              <TouchableOpacity key={e} onPress={() => {
+                const item = messages.find(m => m.id === showReactionPicker)
+                if (item) setReaction(item, e)
+              }}>
+                <Text style={styles.reactionPickerEmoji}>{e}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
 
       <Modal transparent visible={showAttachMenu} animationType="slide" onRequestClose={() => setShowAttachMenu(false)}>
         <Pressable style={styles.menuOverlay} onPress={() => setShowAttachMenu(false)}>
@@ -1006,4 +1166,17 @@ const styles = StyleSheet.create({
   menuLabel:     { color: '#fff', fontSize: 16 },
   menuCancel:    { paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   menuCancelText:{ color: '#4f6ef7', fontSize: 16 },
+  replyQuote:       { borderLeftWidth: 3, borderLeftColor: 'rgba(255,255,255,0.5)', paddingLeft: 8, marginBottom: 6 },
+  replyQuoteSender: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '700' },
+  replyQuoteText:   { color: 'rgba(255,255,255,0.65)', fontSize: 13 },
+  reactionRow:       { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2, marginRight: 4, justifyContent: 'flex-end' },
+  reactionRowTheirs: { justifyContent: 'flex-start', marginLeft: 4, marginRight: 0 },
+  reactionChip:      { backgroundColor: '#1f1f1f', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: '#2a2a2a' },
+  reactionChipMine:  { borderColor: '#4f6ef7' },
+  reactionChipText:  { color: '#fff', fontSize: 13 },
+  replyBar:      { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 14, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#1f1f1f' },
+  replyBarSender:{ color: '#4f6ef7', fontSize: 12, fontWeight: '700' },
+  replyBarText:  { color: '#888', fontSize: 13 },
+  reactionPickerSheet: { flexDirection: 'row', backgroundColor: '#1a1a1a', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 12, gap: 14, alignSelf: 'center', marginBottom: 100 },
+  reactionPickerEmoji: { fontSize: 28 },
 })

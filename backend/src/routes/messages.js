@@ -14,15 +14,22 @@ export async function messageRoutes(app) {
         type: 'object',
         required: ['recipientUsername', 'ciphertext', 'nonce', 'contentType'],
         properties: {
-          recipientUsername: { type: 'string' },
-          ciphertext:        { type: 'string' },
-          nonce:             { type: 'string' },
-          contentType:       { type: 'string', enum: ['text', 'image', 'video', 'document', 'audio'] },
+          recipientUsername:      { type: 'string' },
+          ciphertext:             { type: 'string' },
+          nonce:                  { type: 'string' },
+          contentType:            { type: 'string', enum: ['text', 'image', 'video', 'document', 'audio'] },
+          replyToId:              { type: 'string', nullable: true },
+          replyPreviewCiphertext: { type: 'string', nullable: true },
+          replyPreviewNonce:      { type: 'string', nullable: true },
+          replySender:            { type: 'string', nullable: true },
         },
       },
     },
   }, async (req, reply) => {
-    const { recipientUsername, ciphertext, nonce, contentType } = req.body
+    const {
+      recipientUsername, ciphertext, nonce, contentType,
+      replyToId, replyPreviewCiphertext, replyPreviewNonce, replySender,
+    } = req.body
     const { rows: recipients } = await pool.query(
       'SELECT id, fcm_token FROM users WHERE username = $1',
       [recipientUsername.toLowerCase()]
@@ -43,9 +50,9 @@ export async function messageRoutes(app) {
     )
 
     const { rows } = await pool.query(
-      `INSERT INTO messages (sender_id, recipient_id, ciphertext, nonce, content_type)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
-      [req.user.userId, recipient.id, ciphertext, nonce, contentType]
+      `INSERT INTO messages (sender_id, recipient_id, ciphertext, nonce, content_type, reply_to_id, reply_preview_ciphertext, reply_preview_nonce, reply_sender)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, created_at`,
+      [req.user.userId, recipient.id, ciphertext, nonce, contentType, replyToId ?? null, replyPreviewCiphertext ?? null, replyPreviewNonce ?? null, replySender ?? null]
     )
 
     // Send push notification to recipient if they have a token
@@ -103,7 +110,10 @@ export async function messageRoutes(app) {
     const otherId = other[0].id
 
     const { rows } = await pool.query(
-      `SELECT m.id, su.username AS senderUsername, m.ciphertext, m.nonce, m.content_type, m.created_at
+      `SELECT m.id, su.username AS senderUsername, m.ciphertext, m.nonce, m.content_type, m.created_at,
+              m.reply_to_id, m.reply_preview_ciphertext, m.reply_preview_nonce, m.reply_sender,
+              (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', mr.ciphertext, 'nonce', mr.nonce)), '[]')
+                 FROM message_reactions mr JOIN users ru ON ru.id = mr.user_id WHERE mr.message_id = m.id) AS reactions
        FROM messages m
        JOIN users su ON su.id = m.sender_id
        WHERE (m.sender_id = $1 AND m.recipient_id = $2)
@@ -123,7 +133,10 @@ export async function messageRoutes(app) {
   // Poll for undelivered messages — returns them and marks as delivered
   app.get('/messages/inbox', async (req) => {
     const { rows } = await pool.query(
-      `SELECT m.id, u.username AS senderUsername, m.ciphertext, m.nonce, m.content_type, m.created_at
+      `SELECT m.id, u.username AS senderUsername, m.ciphertext, m.nonce, m.content_type, m.created_at,
+              m.reply_to_id, m.reply_preview_ciphertext, m.reply_preview_nonce, m.reply_sender,
+              (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', mr.ciphertext, 'nonce', mr.nonce)), '[]')
+                 FROM message_reactions mr JOIN users ru ON ru.id = mr.user_id WHERE mr.message_id = m.id) AS reactions
        FROM messages m
        JOIN users u ON u.id = m.sender_id
        WHERE m.recipient_id = $1 AND m.delivered = FALSE
@@ -253,6 +266,64 @@ export async function messageRoutes(app) {
       [req.user.userId, recipient[0].id]
     )
     return { readIds: rows.map(r => r.id) }
+  })
+
+  // Set (or replace) the current user's reaction on a message
+  app.put('/messages/:messageId/reaction', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['ciphertext', 'nonce'],
+        properties: {
+          ciphertext: { type: 'string' },
+          nonce:      { type: 'string' },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const { messageId } = req.params
+    const { ciphertext, nonce } = req.body
+    const { rows: msg } = await pool.query(
+      'SELECT 1 FROM messages WHERE id = $1 AND (sender_id = $2 OR recipient_id = $2)',
+      [messageId, req.user.userId]
+    )
+    if (!msg.length) return reply.code(404).send({ error: 'Message not found' })
+    await pool.query(
+      `INSERT INTO message_reactions (message_id, user_id, ciphertext, nonce)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (message_id, user_id) DO UPDATE SET ciphertext = $3, nonce = $4, created_at = NOW()`,
+      [messageId, req.user.userId, ciphertext, nonce]
+    )
+    return { ok: true }
+  })
+
+  // Remove the current user's reaction on a message
+  app.delete('/messages/:messageId/reaction', async (req, reply) => {
+    await pool.query(
+      'DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2',
+      [req.params.messageId, req.user.userId]
+    )
+    return { ok: true }
+  })
+
+  // Poll for reaction changes across an entire conversation
+  app.get('/messages/reactions/:username', async (req, reply) => {
+    const { rows: other } = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [req.params.username.toLowerCase()]
+    )
+    if (!other.length) return reply.code(404).send({ error: 'User not found' })
+    const otherId = other[0].id
+    const { rows } = await pool.query(
+      `SELECT m.id AS message_id,
+              (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', mr.ciphertext, 'nonce', mr.nonce)), '[]')
+                 FROM message_reactions mr JOIN users ru ON ru.id = mr.user_id WHERE mr.message_id = m.id) AS reactions
+       FROM messages m
+       WHERE ((m.sender_id = $1 AND m.recipient_id = $2) OR (m.sender_id = $2 AND m.recipient_id = $1))
+         AND EXISTS (SELECT 1 FROM message_reactions mr2 WHERE mr2.message_id = m.id)`,
+      [req.user.userId, otherId]
+    )
+    return { reactions: rows }
   })
 
   // Delete a single sent message (sender only)
