@@ -8,9 +8,9 @@ const DURATIONS = [
   { label: 'No limit',  hours: null },
 ]
 
-export default function SaveRequestModal({ request, onDecide }) {
+export default function SaveRequestModal({ request, onDecide, onCancel }) {
   return (
-    <Modal transparent animationType="fade">
+    <Modal transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.overlay}>
         <View style={styles.card}>
           <Text style={styles.title}>Save request</Text>
@@ -30,6 +30,11 @@ export default function SaveRequestModal({ request, onDecide }) {
           <TouchableOpacity style={styles.denyBtn} onPress={() => onDecide('denied', null)}>
             <Text style={styles.denyText}>Deny</Text>
           </TouchableOpacity>
+          {onCancel && (
+            <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
+              <Text style={styles.cancelText}>Decide later</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>
@@ -47,4 +52,6 @@ const styles = StyleSheet.create({
   durationText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   denyBtn:      { backgroundColor: '#3a1a1a', borderRadius: 10, padding: 12, alignItems: 'center', marginTop: 4 },
   denyText:     { color: '#ff4444', fontWeight: '600', fontSize: 15 },
+  cancelBtn:    { padding: 12, alignItems: 'center', marginTop: 4 },
+  cancelText:   { color: '#888', fontWeight: '600', fontSize: 14 },
 })

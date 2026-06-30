@@ -1089,6 +1089,7 @@ export default function ChatScreen({ route, navigation }) {
             try { await api.patch(`/messages/save-requests/${saveRequest.id}`, { decision, expiresHours }) } catch {}
             setSaveRequest(null)
           }}
+          onCancel={() => setSaveRequest(null)}
         />
       )}
     </View>
