@@ -53,6 +53,7 @@ pool.query(`CREATE TABLE IF NOT EXISTS groups (
   joined_at             TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (group_id, user_id)
 )`).catch(e => console.error('group_members migration failed:', e.message)))
+  .then(() => pool.query(`ALTER TABLE groups ADD COLUMN IF NOT EXISTS avatar TEXT`).catch(() => {}))
   .then(() => pool.query(`CREATE TABLE IF NOT EXISTS group_reads (
   group_id  UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

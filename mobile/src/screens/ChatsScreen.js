@@ -156,9 +156,10 @@ export default function ChatsScreen({ navigation }) {
           style={styles.rowMain}
           onPress={() => navigation.navigate('GroupChat', { groupId: item.id, groupName: item.name })}
         >
-          <View style={styles.groupAvatar}>
-            <Text style={styles.avatarText}>{item.name[0].toUpperCase()}</Text>
-          </View>
+          {item.avatar
+            ? <Image source={{ uri: `data:image/jpeg;base64,${item.avatar}` }} style={styles.avatarImg} />
+            : <View style={styles.groupAvatar}><Text style={styles.avatarText}>{item.name[0].toUpperCase()}</Text></View>
+          }
           <Text style={styles.username}>{item.name}</Text>
           {item.unread_count > 0 && (
             <View style={styles.badge}>

@@ -35,6 +35,7 @@ export default function GroupChatScreen({ route, navigation }) {
   const [replyingTo, setReplyingTo] = useState(null)
   const [showReactionPicker, setShowReactionPicker] = useState(null)
   const [memberReads, setMemberReads] = useState({})
+  const [groupAvatar, setGroupAvatar] = useState(null)
 
   const [isRecording, setIsRecording]   = useState(false)
   const [recordSecs, setRecordSecs]     = useState(0)
@@ -60,6 +61,7 @@ export default function GroupChatScreen({ route, navigation }) {
         const group = await api.get(`/groups/${groupId}`)
         setGroupName(group.name)
         setMembers(group.members ?? [])
+        setGroupAvatar(group.avatar ?? null)
 
         const keyBytes = await decryptGroupKey(
           group.myEncryptedGroupKey,
@@ -471,9 +473,13 @@ export default function GroupChatScreen({ route, navigation }) {
           <Icon name="arrow-left" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <View style={styles.groupAvatarSmall}>
-            <Icon name="users" size={16} color="#fff" />
-          </View>
+          {groupAvatar ? (
+            <Image source={{ uri: `data:image/jpeg;base64,${groupAvatar}` }} style={styles.groupAvatarSmallImg} />
+          ) : (
+            <View style={styles.groupAvatarSmall}>
+              <Icon name="users" size={16} color="#fff" />
+            </View>
+          )}
           <View>
             <Text style={styles.headerTitle}>{groupName}</Text>
             <Text style={styles.headerSub}>{members.length} members</Text>
@@ -590,6 +596,7 @@ const styles = StyleSheet.create({
   headerBack:         { padding: 4 },
   headerInfo:         { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   groupAvatarSmall:   { width: 36, height: 36, borderRadius: 18, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center' },
+  groupAvatarSmallImg:{ width: 36, height: 36, borderRadius: 18 },
   headerTitle:        { color: '#fff', fontSize: 16, fontWeight: '700' },
   headerSub:          { color: '#888', fontSize: 12 },
   headerBtn:          { padding: 8 },

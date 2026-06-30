@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, Alert, ActivityIndicator,
+  StyleSheet, Alert, ActivityIndicator, Image,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { launchImageLibrary } from 'react-native-image-picker'
 import { api } from '../api/client'
 import { decryptGroupKey, encryptGroupKey } from '../crypto/keys'
 import Icon from 'react-native-vector-icons/Feather'
@@ -17,6 +18,8 @@ export default function GroupInfoScreen({ route, navigation }) {
   const [adding, setAdding]     = useState(false)
   const [leaving, setLeaving]   = useState(false)
   const [groupKeyBytes, setGroupKeyBytes] = useState(null)
+  const [avatar, setAvatar]     = useState(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
 
   const load = useCallback(async () => {
     const me = await AsyncStorage.getItem('username')
@@ -25,6 +28,7 @@ export default function GroupInfoScreen({ route, navigation }) {
       const group = await api.get(`/groups/${groupId}`)
       setMembers(group.members ?? [])
       setMyRole(group.myRole)
+      setAvatar(group.avatar ?? null)
       const keyBytes = await decryptGroupKey(group.myEncryptedGroupKey, group.myKeyNonce, group.keySenderPublicKey)
       setGroupKeyBytes(keyBytes)
     } catch (e) {
@@ -51,6 +55,22 @@ export default function GroupInfoScreen({ route, navigation }) {
       Alert.alert('Error', e.message)
     } finally {
       setAdding(false)
+    }
+  }
+
+  async function pickAvatar() {
+    const result = await launchImageLibrary({ mediaType: 'photo', includeBase64: true, quality: 0.5, maxWidth: 400, maxHeight: 400 })
+    if (result.didCancel || !result.assets?.[0]) return
+    const base64 = result.assets[0].base64
+    if (!base64) return
+    setAvatarUploading(true)
+    try {
+      await api.put(`/groups/${groupId}/avatar`, { avatar: base64 })
+      setAvatar(base64)
+    } catch (e) {
+      Alert.alert('Upload failed', e.message)
+    } finally {
+      setAvatarUploading(false)
     }
   }
 
@@ -96,9 +116,18 @@ export default function GroupInfoScreen({ route, navigation }) {
       </TouchableOpacity>
 
       <View style={styles.headerBlock}>
-        <View style={styles.groupAvatar}>
-          <Icon name="users" size={28} color="#fff" />
-        </View>
+        <TouchableOpacity style={styles.groupAvatarWrap} onPress={pickAvatar} disabled={avatarUploading}>
+          {avatar ? (
+            <Image source={{ uri: `data:image/jpeg;base64,${avatar}` }} style={styles.groupAvatarImg} />
+          ) : (
+            <View style={styles.groupAvatar}>
+              <Icon name="users" size={28} color="#fff" />
+            </View>
+          )}
+          <View style={styles.avatarBadge}>
+            {avatarUploading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.avatarBadgeText}>Edit</Text>}
+          </View>
+        </TouchableOpacity>
         <Text style={styles.groupName}>{groupName}</Text>
         <Text style={styles.memberCount}>{members.length} members</Text>
       </View>
@@ -153,7 +182,11 @@ const styles = StyleSheet.create({
   container:      { flex: 1, backgroundColor: '#0a0a0a', padding: 20, paddingTop: 50 },
   backBtn:        { marginBottom: 16 },
   headerBlock:    { alignItems: 'center', marginBottom: 24 },
-  groupAvatar:    { width: 72, height: 72, borderRadius: 36, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  groupAvatarWrap:{ marginBottom: 10, position: 'relative' },
+  groupAvatar:    { width: 72, height: 72, borderRadius: 36, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center' },
+  groupAvatarImg: { width: 72, height: 72, borderRadius: 36 },
+  avatarBadge:    { position: 'absolute', bottom: -2, right: -2, backgroundColor: '#1f1f1f', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: '#333' },
+  avatarBadgeText:{ color: '#aaa', fontSize: 11 },
   groupName:      { color: '#fff', fontSize: 20, fontWeight: '700' },
   memberCount:    { color: '#888', fontSize: 13, marginTop: 2 },
   addRow:         { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },

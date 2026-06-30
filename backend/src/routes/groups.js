@@ -92,7 +92,7 @@ export async function groupRoutes(app) {
   // List my groups
   app.get('/groups', async (req) => {
     const { rows } = await pool.query(
-      `SELECT g.id, g.name,
+      `SELECT g.id, g.name, g.avatar,
               (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) AS member_count,
               (SELECT COUNT(*) FROM group_messages gms
                WHERE gms.group_id = g.id
@@ -123,7 +123,7 @@ export async function groupRoutes(app) {
     if (!myRows.length) return reply.code(403).send({ error: 'Not a member' })
 
     const { rows: groupRows } = await pool.query(
-      'SELECT id, name FROM groups WHERE id = $1',
+      'SELECT id, name, avatar FROM groups WHERE id = $1',
       [groupId]
     )
     if (!groupRows.length) return reply.code(404).send({ error: 'Group not found' })
@@ -350,6 +350,26 @@ export async function groupRoutes(app) {
       [groupId]
     )
     return { reads: rows }
+  })
+
+  // Update group photo (any member, base64 — not E2E content, same model as profile avatars)
+  app.put('/groups/:groupId/avatar', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['avatar'],
+        properties: { avatar: { type: 'string' } },
+      },
+    },
+  }, async (req, reply) => {
+    const { groupId } = req.params
+    const { rows: mem } = await pool.query(
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
+      [groupId, req.user.userId]
+    )
+    if (!mem.length) return reply.code(403).send({ error: 'Not a member' })
+    await pool.query('UPDATE groups SET avatar = $1 WHERE id = $2', [req.body.avatar, groupId])
+    return { ok: true }
   })
 
   // Add a member (admin only) — caller must supply the group key encrypted for the new member
