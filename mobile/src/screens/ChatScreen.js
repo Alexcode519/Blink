@@ -679,7 +679,7 @@ export default function ChatScreen({ route, navigation }) {
             onLongPress={() => showMessageActions(item)}
             delayLongPress={400}
           >
-          <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
+          <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs, (isImage || isVideo) && styles.bubbleMedia]}>
             {item.replyTo && (
               <View style={styles.replyQuote}>
                 <Text style={styles.replyQuoteSender}>{item.replyTo.sender}</Text>
@@ -1139,6 +1139,7 @@ const styles = StyleSheet.create({
   avatarPlaceholder:{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
   avatarInitial:    { color: '#fff', fontSize: 12, fontWeight: '700' },
   bubble:        { minWidth: 60, borderRadius: 16, padding: 10, flexShrink: 1 },
+  bubbleMedia:   { padding: 3 },
   mine:          { backgroundColor: '#4f6ef7' },
   theirs:        { backgroundColor: '#1f1f1f' },
   bubbleText:    { color: '#fff', lineHeight: 22 },

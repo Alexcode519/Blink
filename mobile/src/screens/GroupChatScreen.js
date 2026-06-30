@@ -401,7 +401,7 @@ export default function GroupChatScreen({ route, navigation }) {
       <View style={item.mine ? styles.mineOuter : styles.theirsOuter}>
         <View style={styles.bubbleWrap}>
           <TouchableOpacity activeOpacity={0.85} onLongPress={() => showMessageActions(item)} delayLongPress={400}>
-          <View style={[styles.bubble, item.mine ? styles.mineBubble : styles.theirsBubble]}>
+          <View style={[styles.bubble, item.mine ? styles.mineBubble : styles.theirsBubble, (isImage || isVideo) && styles.bubbleMedia]}>
             {!item.mine && (
               <Text style={styles.senderLabel}>{item.sender}</Text>
             )}
@@ -604,6 +604,7 @@ const styles = StyleSheet.create({
   theirsOuter:        { width: '100%', alignItems: 'flex-start', marginBottom: 6 },
   bubbleWrap:         { flexDirection: 'row', alignItems: 'flex-end', maxWidth: '88%' },
   bubble:             { minWidth: 60, borderRadius: 16, padding: 10, flexShrink: 1 },
+  bubbleMedia:        { padding: 3 },
   mineBubble:         { backgroundColor: '#4f6ef7', borderBottomRightRadius: 4 },
   theirsBubble:       { backgroundColor: '#1f1f1f', borderBottomLeftRadius: 4 },
   senderLabel:        { color: '#4f6ef7', fontSize: 11, fontWeight: '700', marginBottom: 4 },
