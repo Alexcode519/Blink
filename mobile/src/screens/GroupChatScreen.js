@@ -12,6 +12,7 @@ import { pickerGuard } from '../utils/pickerGuard'
 import RNFS from 'react-native-fs'
 import Video from 'react-native-video'
 import { api } from '../api/client'
+import { saveToLibrary } from '../library/storage'
 import { decryptGroupKey, encryptWithGroupKey, decryptWithGroupKey } from '../crypto/keys'
 import Icon from 'react-native-vector-icons/Feather'
 import notifee from '@notifee/react-native'
@@ -264,6 +265,23 @@ export default function GroupChatScreen({ route, navigation }) {
     }
   }
 
+  async function saveToGroupLibrary(item) {
+    try {
+      const b64 = item.uri?.replace(/^data:[^;]+;base64,/, '')
+      if (!b64) return
+      await saveToLibrary({
+        payload: b64,
+        contentType: item.contentType,
+        label: item.filename,
+        fromGroupId: groupId,
+        groupName,
+      })
+      Alert.alert('Saved', 'Added to your Blink Library.')
+    } catch (e) {
+      Alert.alert('Save failed', e.message)
+    }
+  }
+
   function seenByCount(item) {
     if (!item.mine || !item.createdAt) return 0
     const t = new Date(item.createdAt).getTime()
@@ -410,6 +428,11 @@ export default function GroupChatScreen({ route, navigation }) {
             )}
             {!isAudio && !isImage && !isVideo && !isDoc && (
               <Text style={[styles.bubbleText, { fontSize }]}>{item.text}</Text>
+            )}
+            {!item.mine && (isImage || isVideo || isDoc) && (
+              <TouchableOpacity onPress={() => saveToGroupLibrary(item)}>
+                <Text style={styles.saveBtn}>⬇ Save</Text>
+              </TouchableOpacity>
             )}
             <Text style={styles.timestamp}>
               {item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
@@ -604,6 +627,7 @@ const styles = StyleSheet.create({
   reactionChipMine:   { borderColor: '#4f6ef7' },
   reactionChipText:   { color: '#fff', fontSize: 13 },
   seenByText:         { color: '#555', fontSize: 11, marginTop: 2, alignSelf: 'flex-end' },
+  saveBtn:            { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 },
   replyBar:           { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 14, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#1f1f1f' },
   replyBarSender:     { color: '#4f6ef7', fontSize: 12, fontWeight: '700' },
   replyBarText:       { color: '#888', fontSize: 13 },

@@ -12,6 +12,8 @@ const SIZE = (Dimensions.get('window').width - 4) / COL
 
 export default function LibraryScreen({ navigation, route }) {
   const fromUsername = route?.params?.fromUsername ?? null
+  const fromGroupId  = route?.params?.fromGroupId ?? null
+  const groupName    = route?.params?.groupName ?? null
   const [items, setItems] = useState([])
   const [preview, setPreview] = useState(null)
   const pendingExtend = useRef({}) // itemId -> requestId being polled
@@ -19,9 +21,11 @@ export default function LibraryScreen({ navigation, route }) {
   useFocusEffect(useCallback(() => {
     loadIndex().then(idx => {
       const all = [...idx].reverse()
-      setItems(fromUsername ? all.filter(i => i.fromUsername === fromUsername) : all)
+      if (fromUsername) setItems(all.filter(i => i.fromUsername === fromUsername))
+      else if (fromGroupId) setItems(all.filter(i => i.fromGroupId === fromGroupId))
+      else setItems(all)
     })
-  }, [fromUsername]))
+  }, [fromUsername, fromGroupId]))
 
   async function confirmDelete(id) {
     Alert.alert('Delete', 'Remove this from your library?', [
@@ -101,7 +105,7 @@ export default function LibraryScreen({ navigation, route }) {
       <TouchableOpacity style={styles.fileCell} onLongPress={() => confirmDelete(item.id)}>
         <Text style={styles.fileIcon}>{item.contentType === 'video' ? '🎥' : '📄'}</Text>
         <Text style={styles.fileName} numberOfLines={2}>{item.label}</Text>
-        <Text style={styles.fileMeta}>{item.fromUsername}</Text>
+        <Text style={styles.fileMeta}>{item.fromUsername ?? item.groupName}</Text>
         {expiry && <Text style={styles.expiryText}>{expiry}</Text>}
         {item.expiresAt && (
           <TouchableOpacity onPress={() => requestExtend(item)} style={styles.extendBadge}>
@@ -118,14 +122,14 @@ export default function LibraryScreen({ navigation, route }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>{fromUsername ? `${fromUsername}'s saves` : 'Library'}</Text>
+        <Text style={styles.header}>{fromUsername ? `${fromUsername}'s saves` : groupName ? `${groupName}'s saves` : 'Library'}</Text>
         <View style={{ width: 60 }} />
       </View>
       {items.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🔒</Text>
           <Text style={styles.emptyText}>Nothing saved yet</Text>
-          <Text style={styles.emptyHint}>{fromUsername ? `No saves from ${fromUsername} yet` : 'Files approved by senders appear here'}</Text>
+          <Text style={styles.emptyHint}>{fromUsername ? `No saves from ${fromUsername} yet` : groupName ? `No saves from ${groupName} yet` : 'Files approved by senders appear here'}</Text>
         </View>
       ) : (
         <FlatList
@@ -148,7 +152,7 @@ export default function LibraryScreen({ navigation, route }) {
             <Image source={{ uri: `file://${preview.path}` }} style={styles.previewImage} resizeMode="contain" />
           )}
           <View style={styles.previewMeta}>
-            <Text style={styles.previewFrom}>From {preview?.fromUsername}</Text>
+            <Text style={styles.previewFrom}>From {preview?.fromUsername ?? preview?.groupName}</Text>
             <View style={{ flexDirection: 'row', gap: 16 }}>
               {preview?.expiresAt && (
                 <TouchableOpacity onPress={() => requestExtend(preview)}>

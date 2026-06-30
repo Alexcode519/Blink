@@ -54,6 +54,22 @@ export default function GroupInfoScreen({ route, navigation }) {
     }
   }
 
+  function removeMember(member) {
+    Alert.alert('Remove member?', `${member.username} will be removed from ${groupName}.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove', style: 'destructive', onPress: async () => {
+          try {
+            await api.delete(`/groups/${groupId}/members/${member.username}`)
+            setMembers(prev => prev.filter(m => m.username !== member.username))
+          } catch (e) {
+            Alert.alert('Error', e.message)
+          }
+        }
+      },
+    ])
+  }
+
   function leaveGroup() {
     Alert.alert('Leave group?', `You'll no longer receive messages from ${groupName}.`, [
       { text: 'Cancel', style: 'cancel' },
@@ -117,6 +133,11 @@ export default function GroupInfoScreen({ route, navigation }) {
               {item.username}{item.username === myUsername ? ' (you)' : ''}
             </Text>
             {item.role === 'admin' && <Text style={styles.adminTag}>Admin</Text>}
+            {myRole === 'admin' && item.username !== myUsername && (
+              <TouchableOpacity onPress={() => removeMember(item)} style={styles.removeBtn}>
+                <Icon name="user-x" size={18} color="#ff4444" />
+              </TouchableOpacity>
+            )}
           </View>
         )}
       />
@@ -144,6 +165,7 @@ const styles = StyleSheet.create({
   avatarText:     { color: '#fff', fontSize: 16, fontWeight: '700' },
   memberName:     { color: '#fff', fontSize: 15, flex: 1 },
   adminTag:       { color: '#4f6ef7', fontSize: 12, fontWeight: '700' },
+  removeBtn:      { padding: 4, marginLeft: 8 },
   leaveBtn:       { borderWidth: 1, borderColor: '#ff4444', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 12 },
   leaveBtnText:   { color: '#ff4444', fontWeight: '600', fontSize: 15 },
 })

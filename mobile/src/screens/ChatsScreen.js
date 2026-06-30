@@ -149,6 +149,12 @@ export default function ChatsScreen({ navigation }) {
             </View>
           )}
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.chatLibBtn}
+          onPress={() => navigation.navigate('Library', { fromGroupId: item.id, groupName: item.name })}
+        >
+          <FeatherIcon />
+        </TouchableOpacity>
       </View>
     )
   }

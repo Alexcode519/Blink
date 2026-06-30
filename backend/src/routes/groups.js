@@ -403,6 +403,35 @@ export async function groupRoutes(app) {
     return { ok: true }
   })
 
+  // Remove a member (admin only)
+  app.delete('/groups/:groupId/members/:username', async (req, reply) => {
+    const { groupId, username } = req.params
+
+    const { rows: adminRows } = await pool.query(
+      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, req.user.userId]
+    )
+    if (!adminRows.length || adminRows[0].role !== 'admin') {
+      return reply.code(403).send({ error: 'Only admins can remove members' })
+    }
+
+    const { rows: userRows } = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [username.toLowerCase()]
+    )
+    if (!userRows.length) return reply.code(404).send({ error: 'User not found' })
+    if (userRows[0].id === req.user.userId) {
+      return reply.code(400).send({ error: 'Use the leave endpoint to remove yourself' })
+    }
+
+    const { rows } = await pool.query(
+      'DELETE FROM group_members WHERE group_id = $1 AND user_id = $2 RETURNING role',
+      [groupId, userRows[0].id]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Not a member' })
+    return { ok: true }
+  })
+
   // Leave a group
   app.delete('/groups/:groupId/members/me', async (req, reply) => {
     const { groupId } = req.params
