@@ -55,6 +55,55 @@ export async function encryptForRecipient(plaintext, recipientPublicKeyB64) {
   return { ciphertext: encodeBase64(ciphertext), nonce: encodeBase64(nonce) }
 }
 
+// ── Group key helpers ─────────────────────────────────────────────────────────
+// Encrypt the 32-byte group secret key for a specific member using pairwise NaCl box.
+export async function encryptGroupKey(groupKeyBytes, recipientPublicKeyB64) {
+  const privateKey = await loadPrivateKey()
+  const recipientPublicKey = decodeBase64(recipientPublicKeyB64)
+  const nonce = nacl.randomBytes(nacl.box.nonceLength)
+  const ciphertext = nacl.box(groupKeyBytes, nonce, recipientPublicKey, privateKey)
+  return { encryptedGroupKey: encodeBase64(ciphertext), keyNonce: encodeBase64(nonce) }
+}
+
+// Decrypt the group key using the key-sender's public key and our private key.
+export async function decryptGroupKey(encryptedGroupKeyB64, keyNonceB64, keySenderPublicKeyB64) {
+  const privateKey = await loadPrivateKey()
+  const senderPublicKey = decodeBase64(keySenderPublicKeyB64)
+  const decrypted = nacl.box.open(
+    decodeBase64(encryptedGroupKeyB64),
+    decodeBase64(keyNonceB64),
+    senderPublicKey,
+    privateKey
+  )
+  if (!decrypted) throw new Error('Group key decryption failed')
+  return decrypted  // raw Uint8Array (32 bytes)
+}
+
+// Encrypt a message payload with the shared group key (secretbox = symmetric).
+export function encryptWithGroupKey(plaintext, groupKeyBytes) {
+  const nonce = nacl.randomBytes(nacl.secretbox.nonceLength)
+  const encoded = Uint8Array.from(unescape(encodeURIComponent(plaintext)), c => c.charCodeAt(0))
+  const ciphertext = nacl.secretbox(encoded, nonce, groupKeyBytes)
+  return { ciphertext: encodeBase64(ciphertext), nonce: encodeBase64(nonce) }
+}
+
+// Decrypt a group message with the shared group key.
+export function decryptWithGroupKey(ciphertextB64, nonceB64, groupKeyBytes) {
+  const decrypted = nacl.secretbox.open(
+    decodeBase64(ciphertextB64),
+    decodeBase64(nonceB64),
+    groupKeyBytes
+  )
+  if (!decrypted) throw new Error('Group message decryption failed')
+  const CHUNK = 4096
+  let str = ''
+  for (let i = 0; i < decrypted.length; i += CHUNK) {
+    str += String.fromCharCode(...decrypted.subarray(i, i + CHUNK))
+  }
+  return decodeURIComponent(escape(str))
+}
+
+// ── Pairwise helpers ──────────────────────────────────────────────────────────
 export async function decryptFromSender(ciphertextB64, nonceB64, senderPublicKeyB64) {
   const privateKey = await loadPrivateKey()
   const senderPublicKey = decodeBase64(senderPublicKeyB64)

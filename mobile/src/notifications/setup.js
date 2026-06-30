@@ -17,19 +17,29 @@ export function notifIdForSender(senderUsername) {
   return `chat_${senderUsername}`
 }
 
+export function notifIdForGroup(groupId) {
+  return `group_${groupId}`
+}
+
 export async function displayMessageNotification(remoteMessage) {
   try {
     await ensureChannel()
-    const data   = remoteMessage.data ?? {}
-    const title  = data.title ?? 'Blink'
-    const body   = data.body  ?? 'New message'
-    const sender = data.senderUsername ?? ''
+    const data    = remoteMessage.data ?? {}
+    const title   = data.title ?? 'Blink'
+    const body    = data.body  ?? 'New message'
+    const isGroup = data.type === 'new_group_message'
+    const sender  = data.senderUsername ?? ''
+    const groupId = data.groupId ?? ''
+
     // Skip the popup if the user is already looking at that conversation
-    if (sender && sender === getActiveChat()) return
+    const activeKey = isGroup ? `group:${groupId}` : sender
+    if (activeKey && activeKey === getActiveChat()) return
+
     await notifee.displayNotification({
-      id: notifIdForSender(sender),
+      id: isGroup ? notifIdForGroup(groupId) : notifIdForSender(sender),
       title,
       body,
+      data,
       android: {
         channelId: 'blink_messages',
         importance: AndroidImportance.HIGH,

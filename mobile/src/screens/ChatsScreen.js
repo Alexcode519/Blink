@@ -49,6 +49,7 @@ function PersonIcon() {
 
 export default function ChatsScreen({ navigation }) {
   const [conversations, setConversations] = useState([])
+  const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
   const [avatarUri, setAvatarUri] = useState(null)
   const [openMenu, setOpenMenu] = useState(null)
@@ -62,9 +63,14 @@ export default function ChatsScreen({ navigation }) {
       .finally(() => setLoading(false))
   }
 
+  function loadGroups() {
+    api.get('/groups').then(({ groups: g }) => setGroups(g)).catch(() => {})
+  }
+
   useFocusEffect(useCallback(() => {
     isFocused.current = true
     loadConversations()
+    loadGroups()
     RNFS.exists(AVATAR_PATH).then(exists => {
       if (exists) setAvatarUri(`file://${AVATAR_PATH}?t=${Date.now()}`)
       else setAvatarUri(null)
@@ -76,6 +82,7 @@ export default function ChatsScreen({ navigation }) {
     const timer = setInterval(() => {
       if (!isFocused.current) return
       loadConversations()
+      loadGroups()
       api.get('/messages/extend-requests/pending')
         .then(({ requests }) => { if (requests.length && !extendRequest) setExtendRequest(requests[0]) })
         .catch(() => {})
@@ -123,6 +130,27 @@ export default function ChatsScreen({ navigation }) {
         }
       },
     ])
+  }
+
+  function renderGroupItem({ item }) {
+    return (
+      <View style={styles.row}>
+        <TouchableOpacity
+          style={styles.rowMain}
+          onPress={() => navigation.navigate('GroupChat', { groupId: item.id, groupName: item.name })}
+        >
+          <View style={styles.groupAvatar}>
+            <Text style={styles.avatarText}>{item.name[0].toUpperCase()}</Text>
+          </View>
+          <Text style={styles.username}>{item.name}</Text>
+          {item.unread_count > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{item.unread_count > 99 ? '99+' : item.unread_count}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+    )
   }
 
   function renderItem({ item }) {
@@ -197,19 +225,27 @@ export default function ChatsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.newChat} onPress={() => navigation.navigate('FindUser')}>
-        <Text style={styles.newChatText}>+ New conversation</Text>
-      </TouchableOpacity>
+      <View style={styles.newChatRow}>
+        <TouchableOpacity style={[styles.newChat, { flex: 1 }]} onPress={() => navigation.navigate('FindUser')}>
+          <Text style={styles.newChatText}>+ New conversation</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.newChat, styles.newGroupBtn]} onPress={() => navigation.navigate('CreateGroup')}>
+          <Text style={styles.newChatText}>+ Group</Text>
+        </TouchableOpacity>
+      </View>
 
       {loading ? (
         <Text style={styles.hint}>Loading…</Text>
-      ) : conversations.length === 0 ? (
+      ) : conversations.length === 0 && groups.length === 0 ? (
         <Text style={styles.hint}>No conversations yet — start one above</Text>
       ) : (
         <FlatList
-          data={conversations}
-          keyExtractor={i => i.other_user}
-          renderItem={renderItem}
+          data={[
+            ...groups.map(g => ({ ...g, __type: 'group' })),
+            ...conversations.map(c => ({ ...c, __type: 'dm' })),
+          ]}
+          keyExtractor={i => i.__type === 'group' ? `g_${i.id}` : i.other_username}
+          renderItem={({ item }) => item.__type === 'group' ? renderGroupItem({ item }) : renderItem({ item })}
           contentContainerStyle={{ paddingHorizontal: 16 }}
         />
       )}
@@ -223,8 +259,11 @@ const styles = StyleSheet.create({
   title:        { fontSize: 28, fontWeight: '700', color: '#fff' },
   iconBtn:      { padding: 4 },
   profileThumb: { width: 28, height: 28, borderRadius: 14 },
-  newChat:      { marginHorizontal: 16, marginVertical: 12, backgroundColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center' },
+  newChatRow:   { flexDirection: 'row', gap: 10, marginHorizontal: 16, marginVertical: 12 },
+  newChat:      { backgroundColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center' },
+  newGroupBtn:  { paddingHorizontal: 18 },
   newChatText:  { color: '#fff', fontWeight: '600', fontSize: 15 },
+  groupAvatar:  { width: 44, height: 44, borderRadius: 22, backgroundColor: '#8c52ff', alignItems: 'center', justifyContent: 'center' },
   row:          { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
   rowMain:      { flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 14 },
   chatLibBtn:   { paddingHorizontal: 10, paddingVertical: 14 },

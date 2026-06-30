@@ -19,6 +19,9 @@ import SetPatternScreen from '../screens/SetPatternScreen'
 import PatternLoginScreen from '../screens/PatternLoginScreen'
 import FAQScreen from '../screens/FAQScreen'
 import FeedbackScreen from '../screens/FeedbackScreen'
+import CreateGroupScreen from '../screens/CreateGroupScreen'
+import GroupChatScreen from '../screens/GroupChatScreen'
+import GroupInfoScreen from '../screens/GroupInfoScreen'
 
 const Stack = createNativeStackNavigator()
 const screenOpts = { headerShown: false, contentStyle: { backgroundColor: '#0a0a0a' } }
@@ -33,8 +36,10 @@ export default function AppNavigator() {
     async function check() {
       try {
         const initial = await messaging().getInitialNotification()
-        if (initial?.data?.senderUsername) {
-          pendingChatRef.current = initial.data.senderUsername
+        if (initial?.data?.type === 'new_group_message' && initial?.data?.groupId) {
+          pendingChatRef.current = { group: true, groupId: initial.data.groupId }
+        } else if (initial?.data?.senderUsername) {
+          pendingChatRef.current = { group: false, senderUsername: initial.data.senderUsername }
         }
       } catch {}
 
@@ -60,8 +65,10 @@ export default function AppNavigator() {
   useEffect(() => {
     // Notification tapped while app is in background (locked or running)
     const unsub = messaging().onNotificationOpenedApp((remoteMessage) => {
-      if (remoteMessage?.data?.senderUsername) {
-        pendingChatRef.current = remoteMessage.data.senderUsername
+      if (remoteMessage?.data?.type === 'new_group_message' && remoteMessage?.data?.groupId) {
+        pendingChatRef.current = { group: true, groupId: remoteMessage.data.groupId }
+      } else if (remoteMessage?.data?.senderUsername) {
+        pendingChatRef.current = { group: false, senderUsername: remoteMessage.data.senderUsername }
       }
     })
     return () => unsub()
@@ -105,16 +112,15 @@ export default function AppNavigator() {
   }
 
   // Consume pending chat so the next unlock doesn't re-open it
-  const pendingSender = pendingChatRef.current
+  const pendingChat = pendingChatRef.current
   pendingChatRef.current = null
 
   // Build initial state so the chat opens immediately after auth, with Chats behind it
-  const loggedInInitialState = pendingSender ? {
+  const loggedInInitialState = pendingChat ? {
     index: 1,
-    routes: [
-      { name: 'Chats' },
-      { name: 'Chat', params: { recipientUsername: pendingSender } },
-    ],
+    routes: pendingChat.group
+      ? [{ name: 'Chats' }, { name: 'GroupChat', params: { groupId: pendingChat.groupId } }]
+      : [{ name: 'Chats' }, { name: 'Chat', params: { recipientUsername: pendingChat.senderUsername } }],
   } : undefined
 
   if (authState === 'pattern' || authState === 'locked') {
@@ -143,6 +149,9 @@ export default function AppNavigator() {
           <Stack.Screen name="SetPattern" component={SetPatternScreen} />
           <Stack.Screen name="FAQ" component={FAQScreen} />
           <Stack.Screen name="Feedback" component={FeedbackScreen} />
+          <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
+          <Stack.Screen name="GroupChat" component={GroupChatScreen} />
+          <Stack.Screen name="GroupInfo" component={GroupInfoScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     )

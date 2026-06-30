@@ -7,6 +7,7 @@ import { authRoutes } from './routes/auth.js'
 import { landingPage } from './web.js'
 import { userRoutes } from './routes/users.js'
 import { messageRoutes } from './routes/messages.js'
+import { groupRoutes } from './routes/groups.js'
 
 const app = Fastify({
   logger: true,
@@ -37,6 +38,7 @@ await app.register(rateLimit, {
 await app.register(authRoutes, { prefix: '/auth', config: { rateLimit: { max: 10, timeWindow: '1 minute' } } })
 await app.register(userRoutes)
 await app.register(messageRoutes)
+await app.register(groupRoutes)
 
 app.get('/', (req, reply) => reply.type('text/html').send(landingPage))
 app.get('/health', () => ({ ok: true }))
