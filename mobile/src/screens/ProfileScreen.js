@@ -13,6 +13,14 @@ import { FONT_SIZES, useFontSize } from '../context/FontSizeContext'
 
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 
+const DISAPPEARING_OPTIONS = [
+  { label: '1 hour',   hours: 1 },
+  { label: '5 hours',  hours: 5 },
+  { label: '10 hours', hours: 10 },
+  { label: '24 hours', hours: 24 },
+  { label: 'Never',    hours: null },
+]
+
 export default function ProfileScreen({ navigation, onLogout, onLock }) {
   const [username, setUsername]           = useState('')
   const [newUsername, setNewUsername]     = useState('')
@@ -31,6 +39,9 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
   const [fontSizeKey, setLocalFontSizeKey] = useState('medium')
   const [fontDropdownOpen, setFontDropdownOpen] = useState(false)
   const [langModalOpen, setLangModalOpen] = useState(false)
+  const [disappearingEnabled, setDisappearingEnabled] = useState(false)
+  const [disappearingHours, setDisappearingHours] = useState(null)
+  const [disappearingDropdownOpen, setDisappearingDropdownOpen] = useState(false)
 
   useEffect(() => {
     AsyncStorage.getItem('username').then(u => {
@@ -47,8 +58,27 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
       if (p.created_at) {
         setJoinedDate(new Date(p.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))
       }
+      if (p.disappearingHours) {
+        setDisappearingEnabled(true)
+        setDisappearingHours(p.disappearingHours)
+      }
     }).catch(() => {})
   }, [])
+
+  async function setDisappearing(hours) {
+    setDisappearingHours(hours)
+    try { await api.put('/users/me/disappearing', { hours }) } catch (e) { Alert.alert('Error', e.message) }
+  }
+
+  function toggleDisappearing(value) {
+    setDisappearingEnabled(value)
+    if (value) {
+      setDisappearingDropdownOpen(true)
+    } else {
+      setDisappearingHours(null)
+      setDisappearing(null)
+    }
+  }
 
   async function loadAvatar() {
     const exists = await RNFS.exists(AVATAR_PATH)
@@ -198,6 +228,47 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
               )}
             />
             <TouchableOpacity style={styles.modalClose} onPress={() => setFontDropdownOpen(false)}>
+              <Text style={styles.modalCloseText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={disappearingDropdownOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setDisappearingDropdownOpen(false)
+          if (!disappearingHours) setDisappearingEnabled(false)
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Clear chats after</Text>
+            <FlatList
+              data={DISAPPEARING_OPTIONS}
+              keyExtractor={o => o.label}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.langRow, item.hours === disappearingHours && styles.langRowActive]}
+                  onPress={() => {
+                    setDisappearing(item.hours)
+                    setDisappearingDropdownOpen(false)
+                  }}
+                >
+                  <Text style={[styles.langName, item.hours === disappearingHours && styles.langNameActive]}>{item.label}</Text>
+                  {item.hours === disappearingHours && <Text style={styles.langCheck}>✓</Text>}
+                </TouchableOpacity>
+              )}
+            />
+            <TouchableOpacity
+              style={styles.modalClose}
+              onPress={() => {
+                setDisappearingDropdownOpen(false)
+                if (!disappearingHours) setDisappearingEnabled(false)
+              }}
+            >
               <Text style={styles.modalCloseText}>Cancel</Text>
             </TouchableOpacity>
           </View>
@@ -360,6 +431,25 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
         <Text style={[styles.fontSizePreview, { fontSize }]}>Preview: This is how your messages will look.</Text>
       </View>
 
+      {/* Disappearing messages */}
+      <View style={styles.section}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.sectionTitle}>Disappearing Messages</Text>
+          <Switch
+            value={disappearingEnabled}
+            onValueChange={toggleDisappearing}
+            trackColor={{ false: '#333', true: '#4f6ef7' }}
+            thumbColor="#fff"
+          />
+        </View>
+        {disappearingEnabled && (
+          <TouchableOpacity style={[styles.langSelector, { marginTop: 10 }]} onPress={() => setDisappearingDropdownOpen(true)}>
+            <Text style={styles.langValue}>{DISAPPEARING_OPTIONS.find(o => o.hours === disappearingHours)?.label ?? 'Never'}</Text>
+            <Text style={styles.langChevron}>▼</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
       {/* Help section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Help</Text>
@@ -412,6 +502,7 @@ const styles = StyleSheet.create({
   joined:           { color: '#555', fontSize: 13, textAlign: 'center', marginBottom: 28 },
   section:          { paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
   sectionTitle:     { color: '#888', fontSize: 12, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
+  rowBetween:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   collapseRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   collapseRight:    { flexDirection: 'row', alignItems: 'center', gap: 10 },
   helpIcon:         { color: '#fff', fontSize: 13, fontWeight: '700', backgroundColor: '#333', borderRadius: 10, width: 20, height: 20, textAlign: 'center', lineHeight: 20 },

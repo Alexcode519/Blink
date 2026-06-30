@@ -1,5 +1,6 @@
 import { pool } from '../db/pool.js'
 import { createHash, randomBytes, timingSafeEqual } from 'crypto'
+import { runDisappearingSweep } from '../jobs/disappearingSweep.js'
 
 // In-memory typing state: Map<userId, { recipientId, expiresAt }>
 const typingState = new Map()
@@ -63,10 +64,28 @@ export async function userRoutes(app) {
   // Get own profile
   app.get('/users/me/profile', async (req) => {
     const { rows } = await pool.query(
-      'SELECT username, created_at FROM users WHERE id = $1',
+      'SELECT username, created_at, disappearing_hours AS "disappearingHours" FROM users WHERE id = $1',
       [req.user.userId]
     )
     return rows[0]
+  })
+
+  // Set (or clear) the disappearing-messages window for this user.
+  // hours = null/0 means "never" (off). Also runs an immediate sweep so the
+  // new setting takes effect right away instead of waiting for the next tick.
+  app.put('/users/me/disappearing', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['hours'],
+        properties: { hours: { type: 'number', nullable: true } },
+      },
+    },
+  }, async (req, reply) => {
+    const hours = req.body.hours && req.body.hours > 0 ? req.body.hours : null
+    await pool.query('UPDATE users SET disappearing_hours = $1 WHERE id = $2', [hours, req.user.userId])
+    runDisappearingSweep().catch(() => {})
+    return { ok: true, disappearingHours: hours }
   })
 
   // Update username

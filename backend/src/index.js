@@ -8,6 +8,7 @@ import { landingPage } from './web.js'
 import { userRoutes } from './routes/users.js'
 import { messageRoutes } from './routes/messages.js'
 import { groupRoutes } from './routes/groups.js'
+import { startDisappearingSweep } from './jobs/disappearingSweep.js'
 
 const app = Fastify({
   logger: true,
@@ -46,4 +47,5 @@ app.get('/version', () => ({ version: 'v3' }))
 
 const port = Number(process.env.PORT ?? 3000)
 await app.listen({ port, host: '0.0.0.0' })
+startDisappearingSweep()
 // Sun Jun 28 21:50:03 SAST 2026
