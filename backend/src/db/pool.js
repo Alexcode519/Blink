@@ -33,14 +33,17 @@ pool.query(`CREATE TABLE IF NOT EXISTS blocked_users (
   PRIMARY KEY (blocker_id, blocked_id)
 )`).then(() => console.log('blocked_users table ready')).catch(e => console.error('blocked_users migration failed:', e.message))
 
+// Chained sequentially: group_members/group_reads/group_messages have FKs into
+// groups, and unchained pool.query() calls can land on different pool
+// connections and race ahead of the table they depend on.
 pool.query(`CREATE TABLE IF NOT EXISTS groups (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name         TEXT NOT NULL,
   created_by   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at   TIMESTAMPTZ DEFAULT NOW()
-)`).catch(e => console.error('groups migration failed:', e.message))
-
-pool.query(`CREATE TABLE IF NOT EXISTS group_members (
+)`)
+  .catch(e => console.error('groups migration failed:', e.message))
+  .then(() => pool.query(`CREATE TABLE IF NOT EXISTS group_members (
   group_id              UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   user_id               UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   encrypted_group_key   TEXT NOT NULL,
@@ -49,16 +52,14 @@ pool.query(`CREATE TABLE IF NOT EXISTS group_members (
   role                  TEXT NOT NULL DEFAULT 'member',
   joined_at             TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (group_id, user_id)
-)`).catch(e => console.error('group_members migration failed:', e.message))
-
-pool.query(`CREATE TABLE IF NOT EXISTS group_reads (
+)`).catch(e => console.error('group_members migration failed:', e.message)))
+  .then(() => pool.query(`CREATE TABLE IF NOT EXISTS group_reads (
   group_id  UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   last_read TIMESTAMPTZ NOT NULL,
   PRIMARY KEY (group_id, user_id)
-)`).catch(e => console.error('group_reads migration failed:', e.message))
-
-pool.query(`CREATE TABLE IF NOT EXISTS group_messages (
+)`).catch(e => console.error('group_reads migration failed:', e.message)))
+  .then(() => pool.query(`CREATE TABLE IF NOT EXISTS group_messages (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   group_id     UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   sender_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -66,4 +67,4 @@ pool.query(`CREATE TABLE IF NOT EXISTS group_messages (
   nonce        TEXT NOT NULL,
   content_type TEXT NOT NULL DEFAULT 'text',
   created_at   TIMESTAMPTZ DEFAULT NOW()
-)`).catch(e => console.error('group_messages migration failed:', e.message))
+)`).catch(e => console.error('group_messages migration failed:', e.message)))
