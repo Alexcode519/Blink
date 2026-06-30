@@ -926,6 +926,12 @@ export default function ChatScreen({ route, navigation }) {
           >
             <Icon name="feather" size={20} color="#4f6ef7" />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => navigation.navigate('SafetyNumber', { recipientUsername, recipientPublicKey: recipientPublicKeyRef.current })}
+          >
+            <Icon name="shield" size={20} color="#888" />
+          </TouchableOpacity>
         </View>
       </View>
 

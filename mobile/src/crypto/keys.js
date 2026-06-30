@@ -122,3 +122,31 @@ export async function decryptFromSender(ciphertextB64, nonceB64, senderPublicKey
   }
   return decodeURIComponent(escape(str))
 }
+
+// ── Safety number (key fingerprint) ────────────────────────────────────────
+function compareBytes(a, b) {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) return a[i] - b[i]
+  }
+  return a.length - b.length
+}
+
+// Deterministic regardless of which side computes it — both public keys are
+// sorted before hashing so alex→sash and sash→alex produce the same number.
+export function computeSafetyNumber(myPublicKeyB64, theirPublicKeyB64) {
+  const a = decodeBase64(myPublicKeyB64)
+  const b = decodeBase64(theirPublicKeyB64)
+  const [first, second] = compareBytes(a, b) <= 0 ? [a, b] : [b, a]
+  const combined = new Uint8Array(first.length + second.length)
+  combined.set(first, 0)
+  combined.set(second, first.length)
+  const digest = nacl.hash(combined) // 64-byte SHA-512
+
+  let numeric = ''
+  for (let i = 0; i < 12; i++) {
+    const chunk = digest.slice(i * 5, i * 5 + 5)
+    const value = chunk.reduce((acc, byte) => (acc * 256 + byte) % 100000, 0)
+    numeric += value.toString().padStart(5, '0')
+  }
+  return numeric // 60 digits, grouped by 5 for display
+}
