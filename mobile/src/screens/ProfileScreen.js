@@ -43,6 +43,11 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
   const [disappearingHours, setDisappearingHours] = useState(null)
   const [disappearingDropdownOpen, setDisappearingDropdownOpen] = useState(false)
   const [duressSet, setDuressSet] = useState(false)
+  const [openSection, setOpenSection] = useState(null) // 'account' | 'preferences' | 'security' | 'help' | null
+
+  function toggleSection(key) {
+    setOpenSection(prev => prev === key ? null : key)
+  }
 
   useEffect(() => {
     AsyncStorage.getItem('username').then(u => {
@@ -303,53 +308,59 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
 
       {/* Account section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account</Text>
-
-        <TextInput
-          style={styles.input}
-          value={newUsername}
-          onChangeText={setNewUsername}
-          autoCapitalize="none"
-          placeholder="New username"
-          placeholderTextColor="#555"
-        />
-        <Text style={styles.hint}>3–30 characters, letters/numbers/underscores only</Text>
-        <TouchableOpacity
-          style={[styles.btn, newUsername.trim() === username && styles.btnDisabled, { marginBottom: 12 }]}
-          onPress={saveUsername}
-          disabled={loading || newUsername.trim() === username}
-        >
-          <Text style={styles.btnText}>{t(language, 'saveUsername')}</Text>
+        <TouchableOpacity style={styles.collapseRow} onPress={() => toggleSection('account')}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <Text style={styles.sectionChevron}>{openSection === 'account' ? '▲' : '▼'}</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity style={styles.collapseRow} onPress={() => setPasswordOpen(o => !o)}>
-          <Text style={styles.settingLabel}>Change Password</Text>
-          <View style={styles.collapseRight}>
+        {openSection === 'account' && (
+          <View style={styles.sectionBody}>
+            <TextInput
+              style={styles.input}
+              value={newUsername}
+              onChangeText={setNewUsername}
+              autoCapitalize="none"
+              placeholder="New username"
+              placeholderTextColor="#555"
+            />
+            <Text style={styles.hint}>3–30 characters, letters/numbers/underscores only</Text>
             <TouchableOpacity
-              onPress={() => Alert.alert(
-                'Forgotten your password?',
-                'If you have forgotten your password you will need to sign out and create a new profile.',
-                [{ text: 'OK' }]
-              )}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={[styles.btn, newUsername.trim() === username && styles.btnDisabled, { marginBottom: 12 }]}
+              onPress={saveUsername}
+              disabled={loading || newUsername.trim() === username}
             >
-              <Text style={styles.helpIcon}>?</Text>
+              <Text style={styles.btnText}>{t(language, 'saveUsername')}</Text>
             </TouchableOpacity>
-            <Text style={styles.chevron}>{passwordOpen ? '▲' : '▼'}</Text>
+
+            <TouchableOpacity style={styles.collapseRow} onPress={() => setPasswordOpen(o => !o)}>
+              <Text style={styles.settingLabel}>Change Password</Text>
+              <View style={styles.collapseRight}>
+                <TouchableOpacity
+                  onPress={() => Alert.alert(
+                    'Forgotten your password?',
+                    'If you have forgotten your password you will need to sign out and create a new profile.',
+                    [{ text: 'OK' }]
+                  )}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.helpIcon}>?</Text>
+                </TouchableOpacity>
+                <Text style={styles.chevron}>{passwordOpen ? '▲' : '▼'}</Text>
+              </View>
+            </TouchableOpacity>
+            {passwordOpen && (
+              <>
+                <TextInput style={styles.input} value={currentPassword} onChangeText={setCurrentPassword}
+                  secureTextEntry placeholder="Current password" placeholderTextColor="#555" />
+                <TextInput style={styles.input} value={newPassword} onChangeText={setNewPassword}
+                  secureTextEntry placeholder="New password (min. 8 chars)" placeholderTextColor="#555" />
+                <TextInput style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword}
+                  secureTextEntry placeholder="Confirm new password" placeholderTextColor="#555" />
+                <TouchableOpacity style={styles.btn} onPress={savePassword} disabled={loading}>
+                  <Text style={styles.btnText}>Save Password</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
-        </TouchableOpacity>
-        {passwordOpen && (
-          <>
-            <TextInput style={styles.input} value={currentPassword} onChangeText={setCurrentPassword}
-              secureTextEntry placeholder="Current password" placeholderTextColor="#555" />
-            <TextInput style={styles.input} value={newPassword} onChangeText={setNewPassword}
-              secureTextEntry placeholder="New password (min. 8 chars)" placeholderTextColor="#555" />
-            <TextInput style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword}
-              secureTextEntry placeholder="Confirm new password" placeholderTextColor="#555" />
-            <TouchableOpacity style={styles.btn} onPress={savePassword} disabled={loading}>
-              <Text style={styles.btnText}>Save Password</Text>
-            </TouchableOpacity>
-          </>
         )}
       </View>
 
@@ -357,25 +368,35 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
 
       {/* Preferences section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Preferences</Text>
-
-        <TouchableOpacity style={[styles.langSelector, { marginBottom: 12 }]} onPress={() => setLangModalOpen(true)}>
-          <Text style={styles.langSelectorFlag}>{currentLang.flag}</Text>
-          <Text style={styles.langSelectorName}>{currentLang.name}</Text>
-          <Text style={styles.langSelectorChevron}>▼</Text>
+        <TouchableOpacity style={styles.collapseRow} onPress={() => toggleSection('preferences')}>
+          <Text style={styles.sectionTitle}>Preferences</Text>
+          <Text style={styles.sectionChevron}>{openSection === 'preferences' ? '▲' : '▼'}</Text>
         </TouchableOpacity>
+        {openSection === 'preferences' && (
+          <View style={styles.sectionBody}>
+            <TouchableOpacity style={[styles.langSelector, { marginBottom: 12 }]} onPress={() => setLangModalOpen(true)}>
+              <Text style={styles.langSelectorFlag}>{currentLang.flag}</Text>
+              <Text style={styles.langSelectorName}>{currentLang.name}</Text>
+              <Text style={styles.langSelectorChevron}>▼</Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity style={styles.langSelector} onPress={() => setFontDropdownOpen(true)}>
-          <Text style={styles.langValue}>{FONT_SIZES.find(f => f.key === fontSizeKey)?.label ?? 'Medium'}</Text>
-          <Text style={styles.langChevron}>▼</Text>
-        </TouchableOpacity>
-        <Text style={[styles.fontSizePreview, { marginTop: 10, marginBottom: 0 }, { fontSize }]}>Preview: This is how your messages will look.</Text>
+            <TouchableOpacity style={styles.langSelector} onPress={() => setFontDropdownOpen(true)}>
+              <Text style={styles.langValue}>{FONT_SIZES.find(f => f.key === fontSizeKey)?.label ?? 'Medium'}</Text>
+              <Text style={styles.langChevron}>▼</Text>
+            </TouchableOpacity>
+            <Text style={[styles.fontSizePreview, { marginTop: 10, marginBottom: 0 }, { fontSize }]}>Preview: This is how your messages will look.</Text>
+          </View>
+        )}
       </View>
 
       {/* Security & Privacy section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Security & Privacy</Text>
-
+        <TouchableOpacity style={styles.collapseRow} onPress={() => toggleSection('security')}>
+          <Text style={styles.sectionTitle}>Security & Privacy</Text>
+          <Text style={styles.sectionChevron}>{openSection === 'security' ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        {openSection === 'security' && (
+          <View style={styles.sectionBody}>
         <View style={styles.settingRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.settingLabel}>{t(language, 'biometric')}</Text>
@@ -475,27 +496,36 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
             <Text style={styles.langChevron}>▼</Text>
           </TouchableOpacity>
         )}
+          </View>
+        )}
       </View>
 
       {/* Help section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Help</Text>
-        <TouchableOpacity style={[styles.helpRow, { marginBottom: 12 }]} onPress={() => navigation.navigate('FAQ')}>
-          <Text style={styles.helpIcon2}>❓</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.helpRowLabel}>Frequently Asked Questions</Text>
-            <Text style={styles.helpRowHint}>Answers to common questions about Blink</Text>
-          </View>
-          <Text style={styles.helpChevron}>›</Text>
+        <TouchableOpacity style={styles.collapseRow} onPress={() => toggleSection('help')}>
+          <Text style={styles.sectionTitle}>Help</Text>
+          <Text style={styles.sectionChevron}>{openSection === 'help' ? '▲' : '▼'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.helpRow} onPress={() => navigation.navigate('Feedback')}>
-          <Text style={styles.helpIcon2}>💬</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.helpRowLabel}>Send Feedback</Text>
-            <Text style={styles.helpRowHint}>Report a bug or suggest an improvement</Text>
+        {openSection === 'help' && (
+          <View style={styles.sectionBody}>
+            <TouchableOpacity style={[styles.helpRow, { marginBottom: 12 }]} onPress={() => navigation.navigate('FAQ')}>
+              <Text style={styles.helpIcon2}>❓</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.helpRowLabel}>Frequently Asked Questions</Text>
+                <Text style={styles.helpRowHint}>Answers to common questions about Blink</Text>
+              </View>
+              <Text style={styles.helpChevron}>›</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.helpRow} onPress={() => navigation.navigate('Feedback')}>
+              <Text style={styles.helpIcon2}>💬</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.helpRowLabel}>Send Feedback</Text>
+                <Text style={styles.helpRowHint}>Report a bug or suggest an improvement</Text>
+              </View>
+              <Text style={styles.helpChevron}>›</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.helpChevron}>›</Text>
-        </TouchableOpacity>
+        )}
       </View>
 
       {/* Lock / Sign out */}
@@ -528,7 +558,9 @@ const styles = StyleSheet.create({
   displayName:      { color: '#fff', fontSize: 22, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
   joined:           { color: '#555', fontSize: 13, textAlign: 'center', marginBottom: 28 },
   section:          { paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
-  sectionTitle:     { color: '#888', fontSize: 12, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
+  sectionTitle:     { color: '#888', fontSize: 12, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase' },
+  sectionChevron:   { color: '#555', fontSize: 13 },
+  sectionBody:      { marginTop: 16 },
   collapseRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   collapseRight:    { flexDirection: 'row', alignItems: 'center', gap: 10 },
   helpIcon:         { color: '#fff', fontSize: 13, fontWeight: '700', backgroundColor: '#333', borderRadius: 10, width: 20, height: 20, textAlign: 'center', lineHeight: 20 },
