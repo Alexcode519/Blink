@@ -1,6 +1,9 @@
 import { pool } from '../db/pool.js'
 import { sendPushNotification } from '../firebase.js'
 
+// In-memory typing state: Map<groupId, Map<userId, expiresAt>>
+const groupTypingState = new Map()
+
 export async function groupRoutes(app) {
   app.addHook('onRequest', async (req, reply) => {
     try { await req.jwtVerify() }
@@ -370,6 +373,30 @@ export async function groupRoutes(app) {
     if (!mem.length) return reply.code(403).send({ error: 'Not a member' })
     await pool.query('UPDATE groups SET avatar = $1 WHERE id = $2', [req.body.avatar, groupId])
     return { ok: true }
+  })
+
+  // Set typing indicator for a group (expires after 4s)
+  app.post('/groups/:groupId/typing', async (req, reply) => {
+    const { groupId } = req.params
+    const { rows: mem } = await pool.query('SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2', [groupId, req.user.userId])
+    if (!mem.length) return reply.code(403).send({ error: 'Not a member' })
+    if (!groupTypingState.has(groupId)) groupTypingState.set(groupId, new Map())
+    groupTypingState.get(groupId).set(req.user.userId, Date.now() + 4000)
+    return { ok: true }
+  })
+
+  // Poll who's currently typing in a group (excluding yourself)
+  app.get('/groups/:groupId/typing', async (req, reply) => {
+    const { groupId } = req.params
+    const { rows: mem } = await pool.query('SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2', [groupId, req.user.userId])
+    if (!mem.length) return reply.code(403).send({ error: 'Not a member' })
+    const now = Date.now()
+    const map = groupTypingState.get(groupId)
+    if (!map) return { typing: [] }
+    const typingIds = [...map.entries()].filter(([uid, exp]) => exp > now && uid !== req.user.userId).map(([uid]) => uid)
+    if (!typingIds.length) return { typing: [] }
+    const { rows } = await pool.query('SELECT username FROM users WHERE id = ANY($1)', [typingIds])
+    return { typing: rows.map(r => r.username) }
   })
 
   // Add a member (admin only) — caller must supply the group key encrypted for the new member

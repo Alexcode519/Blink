@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, Alert, Image, Modal, Pressable, PermissionsAndroid,
+  StyleSheet, Alert, Image, Modal, Pressable, PermissionsAndroid, Animated,
 } from 'react-native'
 import AudioRecorderPlayer from 'react-native-audio-recorder-player'
 import { useFontSize } from '../context/FontSizeContext'
@@ -36,6 +36,9 @@ export default function GroupChatScreen({ route, navigation }) {
   const [showReactionPicker, setShowReactionPicker] = useState(null)
   const [memberReads, setMemberReads] = useState({})
   const [groupAvatar, setGroupAvatar] = useState(null)
+  const [typingUsers, setTypingUsers] = useState([])
+  const typingTimerRef = useRef(null)
+  const wink = useRef(new Animated.Value(0)).current
 
   const [isRecording, setIsRecording]   = useState(false)
   const [recordSecs, setRecordSecs]     = useState(0)
@@ -49,6 +52,20 @@ export default function GroupChatScreen({ route, navigation }) {
   const latestAtRef   = useRef(null)   // ISO string of last received message
   const listRef       = useRef(null)
   const inputRef      = useRef(null)
+
+  useEffect(() => {
+    if (!typingUsers.length) return
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(1000),
+        Animated.timing(wink, { toValue: 1, duration: 120, useNativeDriver: true }),
+        Animated.timing(wink, { toValue: 0, duration: 120, useNativeDriver: true }),
+        Animated.delay(1200),
+      ])
+    )
+    loop.start()
+    return () => { wink.stopAnimation(); wink.setValue(0) }
+  }, [typingUsers.length])
 
   // ── Bootstrap: load group info + decrypt group key ─────────────────────────
   useEffect(() => {
@@ -79,10 +96,12 @@ export default function GroupChatScreen({ route, navigation }) {
       inboxTimer = setInterval(pollInbox, POLL_INTERVAL)
       reactionTimer = setInterval(pollReactions, POLL_INTERVAL)
       readsTimer = setInterval(pollReads, POLL_INTERVAL)
+      typingTimer = setInterval(pollTyping, 2000)
       pollReads()
+      pollTyping()
     }
 
-    let reactionTimer, readsTimer
+    let reactionTimer, readsTimer, typingTimer
     init()
     notifee.cancelNotification(notifIdForGroup(groupId)).catch(() => {})
     setActiveChat(`group:${groupId}`)
@@ -90,11 +109,26 @@ export default function GroupChatScreen({ route, navigation }) {
     const blurSub  = navigation.addListener('blur', () => clearActiveChat())
 
     return () => {
-      clearInterval(inboxTimer); clearInterval(reactionTimer); clearInterval(readsTimer)
+      clearInterval(inboxTimer); clearInterval(reactionTimer); clearInterval(readsTimer); clearInterval(typingTimer)
       focusSub(); blurSub()
       clearActiveChat()
     }
   }, [])
+
+  const pollTyping = useCallback(async () => {
+    try {
+      const { typing } = await api.get(`/groups/${groupId}/typing`)
+      setTypingUsers(typing ?? [])
+    } catch {}
+  }, [groupId])
+
+  function handleTyping(val) {
+    setText(val)
+    if (!val.trim()) return
+    if (typingTimerRef.current) return
+    api.post(`/groups/${groupId}/typing`, {}).catch(() => {})
+    typingTimerRef.current = setTimeout(() => { typingTimerRef.current = null }, 2000)
+  }
 
   const pollReads = useCallback(async () => {
     try {
@@ -504,6 +538,32 @@ export default function GroupChatScreen({ route, navigation }) {
         onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
       />
 
+      {typingUsers.length > 0 && (
+        <View style={styles.typingRow}>
+          <View style={styles.typingAvatarPlaceholder}>
+            <Icon name="users" size={14} color="#fff" />
+          </View>
+          <View style={styles.typingBubble}>
+            <View style={styles.eye}><View style={styles.pupil} /></View>
+            <Animated.View
+              style={[
+                styles.eye,
+                { transform: [{ scaleY: wink.interpolate({ inputRange: [0, 1], outputRange: [1, 0.1] }) }] },
+              ]}
+            >
+              <View style={styles.pupil} />
+            </Animated.View>
+            <Text style={styles.typingLabel}>
+              {typingUsers.length === 1
+                ? `${typingUsers[0]} is typing`
+                : typingUsers.length === 2
+                  ? `${typingUsers[0]} and ${typingUsers[1]} are typing`
+                  : `${typingUsers.length} people are typing`}
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Attach menu */}
       {showAttachMenu && (
         <Pressable style={styles.attachBackdrop} onPress={() => setShowAttachMenu(false)}>
@@ -556,7 +616,7 @@ export default function GroupChatScreen({ route, navigation }) {
             placeholder="Message…"
             placeholderTextColor="#555"
             value={text}
-            onChangeText={setText}
+            onChangeText={handleTyping}
             multiline
           />
           {text.trim() ? (
@@ -636,6 +696,12 @@ const styles = StyleSheet.create({
   reactionChipText:   { color: '#fff', fontSize: 13 },
   seenByText:         { color: '#555', fontSize: 11, marginTop: 2, alignSelf: 'flex-end' },
   saveBtn:            { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 },
+  typingRow:              { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
+  typingAvatarPlaceholder:{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#2a2a2a', alignItems: 'center', justifyContent: 'center' },
+  typingBubble:           { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1f1f1f', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
+  eye:                    { width: 14, height: 14, borderRadius: 7, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  pupil:                  { width: 6, height: 6, borderRadius: 3, backgroundColor: '#222' },
+  typingLabel:            { color: '#aaa', fontSize: 12, marginLeft: 4 },
   replyBar:           { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 14, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#1f1f1f' },
   replyBarSender:     { color: '#4f6ef7', fontSize: 12, fontWeight: '700' },
   replyBarText:       { color: '#888', fontSize: 13 },
