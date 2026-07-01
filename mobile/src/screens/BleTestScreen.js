@@ -6,6 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getQueue, enqueue, dequeue } from '../mesh/RelayQueue'
 import { onPeerConnected, onData, clearSession, startRelayService, stopRelayService } from '../mesh/MeshProtocol'
+import { initWifiDirect, startWifiDirectDiscovery, stopWifiDirectDiscovery, connectWifiPeer, destroyWifiDirect } from '../mesh/WifiDirectProtocol'
 import { syncPublicKey } from '../crypto/keys'
 
 const { BleModule } = NativeModules
@@ -22,6 +23,7 @@ export default function BleTestScreen({ navigation }) {
   const connectedRef = useRef({})   // mirrors connected for closure access
   const [relayQueue, setRelayQueue] = useState([])
   const [myKeyHash, setMyKeyHash] = useState('')
+  const [wifiPeers, setWifiPeers] = useState([])
   const scanTimer = useRef(null)
 
   function addLog(msg) {
@@ -123,10 +125,22 @@ export default function BleTestScreen({ navigation }) {
         refreshQueue()
       }),
     ]
+    // Init Wi-Fi Direct for extended range
+    initWifiDirect(myHashRef.current, msg => {
+      if (msg?.startsWith('wifi_peers:')) {
+        try { setWifiPeers(JSON.parse(msg.slice(11))) } catch {}
+      } else {
+        addLog(`[WiFi] ${msg}`)
+      }
+    }, null)
+    startWifiDirectDiscovery()
+
     return () => {
       subs.forEach(s => s.remove())
       clearTimeout(scanTimer.current)
       BleModule.stopGattServer()
+      stopWifiDirectDiscovery()
+      destroyWifiDirect()
     }
   }, [])
 
@@ -226,6 +240,24 @@ export default function BleTestScreen({ navigation }) {
 
       {others.length > 0 && (
         <Text style={styles.sectionLabel}>Other nearby: {others.length}</Text>
+      )}
+
+      {/* Wi-Fi Direct peers — extended range ~200m */}
+      {wifiPeers.length > 0 && (
+        <View style={{ marginBottom: 8 }}>
+          <Text style={styles.sectionLabel}>📡 Wi-Fi Direct peers (~200m)</Text>
+          {wifiPeers.map(p => (
+            <TouchableOpacity
+              key={p.address}
+              style={[styles.peerRow, { borderColor: '#34c759' }]}
+              onPress={() => { addLog(`Connecting via Wi-Fi Direct to ${p.name}`); connectWifiPeer(p.address) }}
+            >
+              <Text style={styles.peerName}>📡 {p.name}</Text>
+              <Text style={styles.peerMeta}>{p.address.slice(-8)}</Text>
+              <Text style={[styles.peerAction, { color: '#34c759' }]}>Connect</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       )}
 
       <Text style={styles.sectionLabel}>Log</Text>

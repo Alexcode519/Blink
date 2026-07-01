@@ -19,6 +19,7 @@ class MainApplication : Application(), ReactApplication {
         PackageList(this).packages.apply {
           add(BlePackage())
           add(BleRelayServicePackage())
+          add(WifiDirectPackage())
         },
     )
   }
