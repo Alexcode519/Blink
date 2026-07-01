@@ -179,7 +179,7 @@ export async function messageRoutes(app) {
   })
 
   // Explicitly accept a message request without having to reply first
-  app.post('/messages/requests/:username/accept', async (req, reply) => {
+  app.post('/messages/requests/:username/accept', { schema: { body: { type: 'object' } } }, async (req, reply) => {
     const { rows: other } = await pool.query(
       'SELECT id FROM users WHERE username = $1',
       [req.params.username.toLowerCase()]
@@ -561,7 +561,7 @@ export async function messageRoutes(app) {
   })
 
   // Recipient confirms they've opened a view-once message — wipes ciphertext server-side
-  app.post('/messages/:messageId/viewed', async (req, reply) => {
+  app.post('/messages/:messageId/viewed', { schema: { body: { type: 'object' } } }, async (req, reply) => {
     const { rows } = await pool.query(
       `UPDATE messages
        SET viewed_at = NOW(), ciphertext = '', nonce = ''

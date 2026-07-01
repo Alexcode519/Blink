@@ -141,7 +141,7 @@ export default function ChatScreen({ route, navigation }) {
 
   async function acceptRequest() {
     try {
-      await api.post(`/messages/requests/${recipientUsername}/accept`)
+      await api.post(`/messages/requests/${recipientUsername}/accept`, {})
       setRequested(false)
     } catch (e) {
       Alert.alert('Error', e.message)
@@ -709,7 +709,7 @@ export default function ChatScreen({ route, navigation }) {
   async function openViewOnce(item) {
     // Show full-screen then immediately mark as viewed server-side
     setViewOnceOpened(prev => ({ ...prev, [item.id]: true }))
-    try { await api.post(`/messages/${item.id}/viewed`) } catch {}
+    try { await api.post(`/messages/${item.id}/viewed`, {}) } catch {}
     // Remove from local cache so it won't re-appear
     setMessages(prev => {
       const next = prev.map(m => m.id === item.id ? { ...m, viewed_at: new Date().toISOString() } : m)
