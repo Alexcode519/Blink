@@ -191,6 +191,13 @@ class BleModule(private val reactContext: ReactApplicationContext) :
     (reactContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
 
   private fun emit(name: String, data: WritableMap) {
-    reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)?.emit(name, data)
+    main.post {
+      try {
+        reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)?.emit(name, data)
+        Log.d("BlinkBle", "emitted: $name")
+      } catch (e: Exception) {
+        Log.e("BlinkBle", "emit failed for $name: ${e.message}")
+      }
+    }
   }
 }
