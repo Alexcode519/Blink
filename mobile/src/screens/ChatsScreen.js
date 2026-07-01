@@ -275,17 +275,19 @@ export default function ChatsScreen({ navigation }) {
         </Pressable>
       )}
       <View style={styles.topRow}>
-        {/* Left: gallery + BLE */}
+        {/* Left: gallery only */}
         <View style={styles.topLeft}>
           <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
             <FeatherIcon />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('BleTest')} style={[styles.iconBtn, { marginLeft: 8 }]}>
-            <Text style={{ color: '#4f6ef7', fontSize: 11, fontWeight: '700' }}>BLE</Text>
-          </TouchableOpacity>
         </View>
 
-        {/* Center: Blink title */}
+        {/* BLE between gallery and title */}
+        <TouchableOpacity onPress={() => navigation.navigate('BleTest')} style={styles.iconBtn}>
+          <Text style={{ color: '#4f6ef7', fontSize: 11, fontWeight: '700' }}>BLE</Text>
+        </TouchableOpacity>
+
+        {/* Center: Blink title — absolutely centred so it ignores side widths */}
         <Text style={styles.title}>Blink</Text>
 
         {/* Right: profile */}
