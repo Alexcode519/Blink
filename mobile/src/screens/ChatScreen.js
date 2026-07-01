@@ -463,11 +463,11 @@ export default function ChatScreen({ route, navigation }) {
   }
 
   function startReply(item) {
-    if (item.contentType !== 'text') {
-      Alert.alert('Cannot reply', 'You can only reply to text messages.')
-      return
-    }
-    setReplyingTo({ id: item.id, sender: item.mine ? myUsername : item.from, snippet: item.payload.slice(0, 120) })
+    const snippetMap = { image: '📷 Photo', video: '🎥 Video', audio: '🔊 Voice note', document: '📄 Document' }
+    const snippet = item.contentType === 'text'
+      ? item.payload?.slice(0, 120) ?? ''
+      : snippetMap[item.contentType] ?? item.contentType
+    setReplyingTo({ id: item.id, sender: item.mine ? myUsername : item.from, snippet })
     inputRef.current?.focus()
   }
 
