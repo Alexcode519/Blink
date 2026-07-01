@@ -23,6 +23,7 @@ import CreateGroupScreen from '../screens/CreateGroupScreen'
 import GroupChatScreen from '../screens/GroupChatScreen'
 import GroupInfoScreen from '../screens/GroupInfoScreen'
 import SafetyNumberScreen from '../screens/SafetyNumberScreen'
+import BleTestScreen from '../screens/BleTestScreen'
 
 const Stack = createNativeStackNavigator()
 const screenOpts = { headerShown: false, contentStyle: { backgroundColor: '#0a0a0a' } }
@@ -154,6 +155,7 @@ export default function AppNavigator() {
           <Stack.Screen name="GroupChat" component={GroupChatScreen} />
           <Stack.Screen name="GroupInfo" component={GroupInfoScreen} />
           <Stack.Screen name="SafetyNumber" component={SafetyNumberScreen} />
+          <Stack.Screen name="BleTest" component={BleTestScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     )

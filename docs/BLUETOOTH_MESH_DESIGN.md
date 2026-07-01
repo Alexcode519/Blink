@@ -59,7 +59,9 @@ Ran a time-boxed spike against the real hardware available: a Samsung Galaxy Not
 
 **What was confirmed:**
 - Note 9 has full BLE hardware support (`android.hardware.bluetooth_le` confirmed, Bluetooth fully on)
-- The existing app's build environment (NDK 27 + CMake 3.22) is incompatible with `react-native-ble-plx` 3.5 (New Architecture). Two distinct blockers hit in sequence:
+- Custom Kotlin native module (wrapping `BluetoothLeScanner` directly, no third-party library) **works** — 5 real nearby BLE devices discovered within 5 seconds of scan start, strongest at -50 dBm. Scan started clean, stopped clean, events fired correctly into React Native JS layer.
+- Location permission flow works correctly on API 29 — runtime prompt appeared, user-granted, subsequent scans proceed without re-asking.
+- The `react-native-ble-plx` 3.5 library path is blocked by the existing app's build environment (NDK 27 + CMake 3.22 incompatibility). Two distinct blockers hit in sequence:
   1. CMake 3.22's LTO test uses `-fuse-ld=gold` which NDK 27 removed → solved by installing CMake 3.31.6 and pinning it via `local.properties`
   2. ble-plx 3.5 generates a codegen JNI directory at build time that Gradle's autolinking cmake expects to already exist, creating a circular dependency that no task ordering resolved
 - The emulator's virtual BLE (rootcanal) is isolated from real radio — a real device cannot detect emulator BLE advertisements, making the emulator useless as a BLE test partner

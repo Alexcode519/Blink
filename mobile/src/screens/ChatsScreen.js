@@ -278,6 +278,9 @@ export default function ChatsScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
           <FeatherIcon />
         </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate('BleTest')} style={[styles.iconBtn, { marginLeft: 4 }]}>
+          <Text style={{ color: '#4f6ef7', fontSize: 11, fontWeight: '700' }}>BLE</Text>
+        </TouchableOpacity>
 
         <Text style={styles.title}>Blink</Text>
 
