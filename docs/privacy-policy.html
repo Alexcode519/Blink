@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blink — Privacy Policy</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0 }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background: #0a0a0a; color: #ccc; line-height: 1.7; padding: 40px 20px }
+    .wrap { max-width: 720px; margin: 0 auto }
+    h1 { color: #fff; font-size: 2rem; margin-bottom: 6px }
+    .sub { color: #555; font-size: 14px; margin-bottom: 40px }
+    h2 { color: #fff; font-size: 1.1rem; margin: 32px 0 10px; border-left: 3px solid #4f6ef7; padding-left: 12px }
+    p, li { margin-bottom: 10px; font-size: 15px }
+    ul { padding-left: 20px }
+    .badge { display: inline-block; background: #4f6ef720; border: 1px solid #4f6ef7;
+             color: #4f6ef7; border-radius: 4px; padding: 2px 8px; font-size: 12px;
+             font-weight: 700; margin-right: 6px }
+    .green { background: #34c75920; border-color: #34c759; color: #34c759 }
+    a { color: #4f6ef7; text-decoration: none }
+    footer { margin-top: 60px; color: #444; font-size: 13px }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Blink Privacy Policy</h1>
+  <p class="sub">Last updated: July 2026</p>
+
+  <p>Blink is a privacy-first messaging application. This policy explains what data we collect, why, and how we protect it.</p>
+
+  <h2>What we collect</h2>
+  <ul>
+    <li><span class="badge">Account</span> Username and bcrypt password hash — used to authenticate you. We never store plaintext passwords.</li>
+    <li><span class="badge">Keys</span> Your public encryption key — shared with contacts so they can encrypt messages to you. Your private key never leaves your device.</li>
+    <li><span class="badge">Messages</span> Encrypted ciphertext blobs — stored on our servers only until delivered, then deleted. We cannot read your messages.</li>
+    <li><span class="badge">Notifications</span> Firebase Cloud Messaging token — used only to deliver push notifications. Not shared with third parties.</li>
+  </ul>
+
+  <h2>What we never collect</h2>
+  <ul>
+    <li><span class="badge green">✓</span> Message content (all content is encrypted before it reaches our servers)</li>
+    <li><span class="badge green">✓</span> Your contacts or address book</li>
+    <li><span class="badge green">✓</span> Location data</li>
+    <li><span class="badge green">✓</span> Device identifiers or advertising IDs</li>
+    <li><span class="badge green">✓</span> Behavioural analytics or usage tracking</li>
+    <li><span class="badge green">✓</span> Browsing history</li>
+  </ul>
+
+  <h2>End-to-end encryption</h2>
+  <p>All messages are encrypted using NaCl (libsodium), a peer-reviewed, open cryptography library. Your encryption keys are generated on your device and never transmitted to our servers. This means Blink's operators cannot read your messages even if compelled to do so.</p>
+
+  <h2>Data retention</h2>
+  <ul>
+    <li>Messages are deleted from our servers once delivered to the recipient.</li>
+    <li>View-once media ciphertext is wiped immediately after the recipient opens it.</li>
+    <li>Messages with a burn timer are deleted server-side when the timer expires.</li>
+    <li>Global disappearing-messages settings purge your message history automatically.</li>
+    <li>You can delete your account at any time, which removes all associated data.</li>
+  </ul>
+
+  <h2>Third-party services</h2>
+  <ul>
+    <li><strong>Google Firebase Cloud Messaging (FCM)</strong> — used solely to deliver push notifications. Blink does not share your data with Google for any other purpose. FCM is subject to Google's privacy policy.</li>
+    <li>No analytics providers, no advertising networks, no data brokers.</li>
+  </ul>
+
+  <h2>Bluetooth mesh relay</h2>
+  <p>When you enable the Bluetooth mesh relay feature, Blink uses Bluetooth LE to relay encrypted messages between nearby devices. The content of relayed messages remains encrypted at all times — relay nodes cannot read them. Location data is not collected or transmitted.</p>
+  <p>Bluetooth scanning requires location permission on Android 11 and below. This permission is used exclusively for Bluetooth LE device discovery and not for any location-based service.</p>
+
+  <h2>Children</h2>
+  <p>Blink is not directed at children under 13. We do not knowingly collect data from children.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>We will notify users of material changes to this policy through the app. Continued use of Blink after notification constitutes acceptance of the updated policy.</p>
+
+  <h2>Contact</h2>
+  <p>For privacy questions or data deletion requests: <a href="mailto:alexace.hobarth@gmail.com">alexace.hobarth@gmail.com</a></p>
+
+  <footer>
+    <p>Blink — Encrypted Messenger &nbsp;·&nbsp; <a href="https://github.com/Alexcode519/Blink">Source code</a></p>
+  </footer>
+</div>
+</body>
+</html>

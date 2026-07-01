@@ -52,7 +52,7 @@ class BleRelayService : Service() {
     return NotificationCompat.Builder(this, CHANNEL_ID)
       .setContentTitle("Blink mesh relay active")
       .setContentText("Nearby Blink devices can share messages with you")
-      .setSmallIcon(android.R.drawable.stat_notify_sync)
+      .setSmallIcon(R.drawable.ic_notification)
       .setContentIntent(pi)
       .setOngoing(true)
       .setPriority(NotificationCompat.PRIORITY_LOW)
