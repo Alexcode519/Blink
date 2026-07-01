@@ -275,22 +275,29 @@ export default function ChatsScreen({ navigation }) {
         </Pressable>
       )}
       <View style={styles.topRow}>
-        <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
-          <FeatherIcon />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('BleTest')} style={[styles.iconBtn, { marginLeft: 4 }]}>
-          <Text style={{ color: '#4f6ef7', fontSize: 11, fontWeight: '700' }}>BLE</Text>
-        </TouchableOpacity>
+        {/* Left: gallery + BLE */}
+        <View style={styles.topLeft}>
+          <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
+            <FeatherIcon />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('BleTest')} style={[styles.iconBtn, { marginLeft: 8 }]}>
+            <Text style={{ color: '#4f6ef7', fontSize: 11, fontWeight: '700' }}>BLE</Text>
+          </TouchableOpacity>
+        </View>
 
+        {/* Center: Blink title */}
         <Text style={styles.title}>Blink</Text>
 
-        <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.iconBtn}>
-          {avatarUri ? (
-            <Image source={{ uri: avatarUri }} style={styles.profileThumb} />
-          ) : (
-            <PersonIcon />
-          )}
-        </TouchableOpacity>
+        {/* Right: profile */}
+        <View style={styles.topRight}>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.iconBtn}>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.profileThumb} />
+            ) : (
+              <PersonIcon />
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.newChatRow}>
@@ -324,6 +331,8 @@ export default function ChatsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: '#0a0a0a' },
   topRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 8 },
+  topLeft:      { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  topRight:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flex: 1 },
   title:        { fontSize: 28, fontWeight: '700', color: '#fff' },
   iconBtn:      { padding: 4 },
   profileThumb: { width: 28, height: 28, borderRadius: 14 },
