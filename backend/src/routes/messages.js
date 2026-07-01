@@ -18,6 +18,7 @@ export async function messageRoutes(app) {
           ciphertext:             { type: 'string' },
           nonce:                  { type: 'string' },
           contentType:            { type: 'string', enum: ['text', 'image', 'video', 'document', 'audio'] },
+          viewOnce:               { type: 'boolean', nullable: true },
           replyToId:              { type: 'string', nullable: true },
           replyPreviewCiphertext: { type: 'string', nullable: true },
           replyPreviewNonce:      { type: 'string', nullable: true },
@@ -27,7 +28,7 @@ export async function messageRoutes(app) {
     },
   }, async (req, reply) => {
     const {
-      recipientUsername, ciphertext, nonce, contentType,
+      recipientUsername, ciphertext, nonce, contentType, viewOnce,
       replyToId, replyPreviewCiphertext, replyPreviewNonce, replySender,
     } = req.body
     const { rows: recipients } = await pool.query(
@@ -50,9 +51,9 @@ export async function messageRoutes(app) {
     )
 
     const { rows } = await pool.query(
-      `INSERT INTO messages (sender_id, recipient_id, ciphertext, nonce, content_type, reply_to_id, reply_preview_ciphertext, reply_preview_nonce, reply_sender)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, created_at`,
-      [req.user.userId, recipient.id, ciphertext, nonce, contentType, replyToId ?? null, replyPreviewCiphertext ?? null, replyPreviewNonce ?? null, replySender ?? null]
+      `INSERT INTO messages (sender_id, recipient_id, ciphertext, nonce, content_type, view_once, reply_to_id, reply_preview_ciphertext, reply_preview_nonce, reply_sender)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, created_at`,
+      [req.user.userId, recipient.id, ciphertext, nonce, contentType, viewOnce ?? false, replyToId ?? null, replyPreviewCiphertext ?? null, replyPreviewNonce ?? null, replySender ?? null]
     )
 
     // Sending a message implicitly accepts that contact from the sender's
@@ -201,7 +202,10 @@ export async function messageRoutes(app) {
     const otherId = other[0].id
 
     const { rows } = await pool.query(
-      `SELECT m.id, su.username AS senderUsername, m.ciphertext, m.nonce, m.content_type, m.created_at,
+      `SELECT m.id, su.username AS senderUsername,
+              CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.ciphertext END AS ciphertext,
+              CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.nonce END AS nonce,
+              m.content_type, m.created_at, m.view_once, m.viewed_at,
               m.reply_to_id, m.reply_preview_ciphertext, m.reply_preview_nonce, m.reply_sender,
               (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', mr.ciphertext, 'nonce', mr.nonce)), '[]')
                  FROM message_reactions mr JOIN users ru ON ru.id = mr.user_id WHERE mr.message_id = m.id) AS reactions
@@ -224,7 +228,10 @@ export async function messageRoutes(app) {
   // Poll for undelivered messages — returns them and marks as delivered
   app.get('/messages/inbox', async (req) => {
     const { rows } = await pool.query(
-      `SELECT m.id, u.username AS senderUsername, m.ciphertext, m.nonce, m.content_type, m.created_at,
+      `SELECT m.id, u.username AS senderUsername,
+              CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.ciphertext END AS ciphertext,
+              CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.nonce END AS nonce,
+              m.content_type, m.created_at, m.view_once, m.viewed_at,
               m.reply_to_id, m.reply_preview_ciphertext, m.reply_preview_nonce, m.reply_sender,
               (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', mr.ciphertext, 'nonce', mr.nonce)), '[]')
                  FROM message_reactions mr JOIN users ru ON ru.id = mr.user_id WHERE mr.message_id = m.id) AS reactions
@@ -551,6 +558,19 @@ export async function messageRoutes(app) {
     )
     if (!rows.length) return reply.code(404).send({ error: 'Not found' })
     return { status: rows[0].status, expiresAt: rows[0].expires_at ?? null }
+  })
+
+  // Recipient confirms they've opened a view-once message — wipes ciphertext server-side
+  app.post('/messages/:messageId/viewed', async (req, reply) => {
+    const { rows } = await pool.query(
+      `UPDATE messages
+       SET viewed_at = NOW(), ciphertext = '', nonce = ''
+       WHERE id = $1 AND recipient_id = $2 AND view_once = TRUE AND viewed_at IS NULL
+       RETURNING id`,
+      [req.params.messageId, req.user.userId]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Not found or already viewed' })
+    return { ok: true }
   })
 
   // Recipient polls for the outcome of their save request

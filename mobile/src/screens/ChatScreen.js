@@ -36,6 +36,8 @@ export default function ChatScreen({ route, navigation }) {
   const [recipientAvatar, setRecipientAvatar] = useState(null)
   const [saveRequest, setSaveRequest] = useState(null)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [viewOnce, setViewOnce] = useState(false)
+  const [viewOnceOpened, setViewOnceOpened] = useState({}) // messageId -> true
   const [recipientStatus, setRecipientStatus] = useState(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -313,9 +315,9 @@ export default function ChatScreen({ route, navigation }) {
             if (uri) payload = uri
           }
           const extras = await decodeExtras(m)
-          return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at, ...extras }
+          return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at, view_once: m.view_once, viewed_at: m.viewed_at, ...extras }
         } catch (e) {
-          return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at }
+          return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at, view_once: m.view_once, viewed_at: m.viewed_at }
         }
       }))
       setMessages(prev => {
@@ -361,9 +363,9 @@ export default function ChatScreen({ route, navigation }) {
               if (uri) payload = uri
             }
             const extras = await decodeExtras(m)
-            return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at, ...extras }
+            return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at, view_once: m.view_once, viewed_at: m.viewed_at, ...extras }
           } catch (e) {
-            return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at }
+            return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at, view_once: m.view_once, viewed_at: m.viewed_at }
           }
         })
       )
@@ -379,7 +381,7 @@ export default function ChatScreen({ route, navigation }) {
     } catch {}
   }, [recipientPublicKey])
 
-  async function sendPayload(payload, contentType, label, replyTo = null) {
+  async function sendPayload(payload, contentType, label, replyTo = null, isViewOnce = false) {
     setRequested(false) // sending implicitly accepts the contact, mirrors backend behavior
     // Add a temporary message immediately so it appears without waiting for the server
     const tempId = `temp_${Date.now()}`
@@ -405,7 +407,7 @@ export default function ChatScreen({ route, navigation }) {
         const { ciphertext: rc, nonce: rn } = await encryptForRecipient(replyTo.snippet, recipientPublicKeyRef.current)
         replyFields = { replyToId: replyTo.id, replyPreviewCiphertext: rc, replyPreviewNonce: rn, replySender: replyTo.sender }
       }
-      const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType, ...replyFields })
+      const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType, viewOnce: isViewOnce, ...replyFields })
       const id = messageId ?? tempId
 
       // Rename local media file to final id
@@ -527,7 +529,8 @@ export default function ChatScreen({ route, navigation }) {
     await new Promise(r => setTimeout(r, 500))
     const asset = result.assets[0]
     const base64 = asset.base64 ?? await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
-    await sendPayload(base64, 'image', asset.fileName ?? 'photo')
+    const vo = viewOnce; setViewOnce(false)
+    await sendPayload(base64, 'image', asset.fileName ?? 'photo', null, vo)
   }
 
   async function pickPhoto() {
@@ -538,7 +541,8 @@ export default function ChatScreen({ route, navigation }) {
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
     const base64 = asset.base64 ?? await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
-    await sendPayload(base64, 'image', asset.fileName)
+    const vo = viewOnce; setViewOnce(false)
+    await sendPayload(base64, 'image', asset.fileName, null, vo)
   }
 
   async function pickVideo() {
@@ -702,12 +706,58 @@ export default function ChatScreen({ route, navigation }) {
     }
   }
 
+  async function openViewOnce(item) {
+    // Show full-screen then immediately mark as viewed server-side
+    setViewOnceOpened(prev => ({ ...prev, [item.id]: true }))
+    try { await api.post(`/messages/${item.id}/viewed`) } catch {}
+    // Remove from local cache so it won't re-appear
+    setMessages(prev => {
+      const next = prev.map(m => m.id === item.id ? { ...m, viewed_at: new Date().toISOString() } : m)
+      saveCache(next)
+      return next
+    })
+  }
+
   function renderBubble(item) {
     const isImage = item.contentType === 'image'
     const isVideo = item.contentType === 'video'
     const isDoc   = item.contentType === 'document'
     const isAudio = item.contentType === 'audio'
     const canSave = !item.mine && (isImage || isVideo || isDoc)
+
+    // View-once: show tap-to-view placeholder if not yet opened
+    const isViewOnce = item.view_once
+    const alreadyViewed = isViewOnce && (item.viewed_at || viewOnceOpened[item.id])
+    if (isViewOnce && !item.mine) {
+      if (alreadyViewed) {
+        return (
+          <View key={item.id} style={[item.mine ? styles.mineOuter : styles.theirsOuter, { marginVertical: 4 }]}>
+            <View style={[styles.bubbleWrap, item.mine ? styles.mineWrap : styles.theirsWrap]}>
+              <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
+                <Text style={styles.viewOnceOpened}>👁 Opened</Text>
+              </View>
+            </View>
+          </View>
+        )
+      }
+      if (!viewOnceOpened[item.id]) {
+        return (
+          <View key={item.id} style={[styles.theirsOuter, { marginVertical: 4 }]}>
+            <View style={[styles.bubbleWrap, styles.theirsWrap]}>
+              <TouchableOpacity
+                style={[styles.bubble, styles.theirs, styles.viewOnceBubble]}
+                onPress={() => openViewOnce(item)}
+              >
+                <Text style={styles.viewOnceIcon}>🔥</Text>
+                <Text style={styles.viewOnceLabel}>
+                  {isImage ? 'Photo' : 'Video'} — tap to view once
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )
+      }
+    }
 
     const bubble = (
       <View style={item.mine ? styles.mineOuter : styles.theirsOuter}>
@@ -1130,6 +1180,18 @@ export default function ChatScreen({ route, navigation }) {
         <Pressable style={styles.menuOverlay} onPress={() => setShowAttachMenu(false)}>
           <View style={styles.menuSheet}>
             <Text style={styles.menuTitle}>Send attachment</Text>
+            <TouchableOpacity
+              style={[styles.menuItem, viewOnce && styles.menuItemActive]}
+              onPress={() => setViewOnce(v => !v)}
+            >
+              <View style={[styles.menuIconWrap, viewOnce && { backgroundColor: '#ff4400' }]}>
+                <Text style={{ fontSize: 18 }}>🔥</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuLabel}>View once {viewOnce ? '(ON)' : ''}</Text>
+                <Text style={styles.menuSubLabel}>Recipient can only open once — then it's gone</Text>
+              </View>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={takePhoto}>
               <View style={styles.menuIconWrap}><Icon name="camera" size={20} color="#fff" /></View>
               <Text style={styles.menuLabel}>Camera</Text>
@@ -1245,6 +1307,12 @@ const styles = StyleSheet.create({
   menuItem:      { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' },
   menuIconWrap:  { width: 36, height: 36, borderRadius: 10, backgroundColor: '#2a2a2a', alignItems: 'center', justifyContent: 'center' },
   menuLabel:     { color: '#fff', fontSize: 16 },
+  menuSubLabel:  { color: '#666', fontSize: 12, marginTop: 2 },
+  menuItemActive:{ backgroundColor: '#2a1a00' },
+  viewOnceBubble:{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 },
+  viewOnceIcon:  { fontSize: 22 },
+  viewOnceLabel: { color: '#fff', fontSize: 14, fontWeight: '500' },
+  viewOnceOpened:{ color: '#555', fontSize: 13, fontStyle: 'italic', padding: 8 },
   menuCancel:    { paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   menuCancelText:{ color: '#4f6ef7', fontSize: 16 },
   replyQuote:       { borderLeftWidth: 3, borderLeftColor: 'rgba(255,255,255,0.5)', paddingLeft: 8, marginBottom: 6 },
