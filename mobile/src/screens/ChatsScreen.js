@@ -275,15 +275,12 @@ export default function ChatsScreen({ navigation }) {
         </Pressable>
       )}
       <View style={styles.topRow}>
-        {/* Blink absolutely centred — unaffected by icon counts on either side */}
+        {/* Blink absolutely centred */}
         <Text style={[styles.title, styles.titleCentered]} pointerEvents="none">Blink</Text>
 
-        {/* Left: gallery then BLE */}
+        {/* Left: gallery */}
         <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
           <FeatherIcon />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('BleTest')} style={[styles.iconBtn, { marginLeft: 8 }]}>
-          <Text style={{ color: '#4f6ef7', fontSize: 11, fontWeight: '700' }}>BLE</Text>
         </TouchableOpacity>
 
         {/* Spacer pushes profile to the right */}

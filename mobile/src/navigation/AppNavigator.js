@@ -25,6 +25,7 @@ import GroupChatScreen from '../screens/GroupChatScreen'
 import GroupInfoScreen from '../screens/GroupInfoScreen'
 import SafetyNumberScreen from '../screens/SafetyNumberScreen'
 import BleTestScreen from '../screens/BleTestScreen'
+import OnboardingScreen from '../screens/OnboardingScreen'
 
 const Stack = createNativeStackNavigator()
 const screenOpts = { headerShown: false, contentStyle: { backgroundColor: '#0a0a0a' } }
@@ -166,9 +167,17 @@ export default function AppNavigator() {
   }
 
   // loggedOut
+  // Determine initial route: show onboarding on first ever launch
+  const [initialRoute, setInitialRoute] = React.useState(null)
+  React.useEffect(() => {
+    AsyncStorage.getItem('blink_onboarded').then(v => setInitialRoute(v ? 'Login' : 'Onboarding'))
+  }, [])
+  if (!initialRoute) return null
+
   return (
     <NavigationContainer key="loggedOut">
-      <Stack.Navigator screenOptions={screenOpts}>
+      <Stack.Navigator screenOptions={screenOpts} initialRouteName={initialRoute}>
+        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Login">
           {props => <LoginScreen {...props} onLogin={handleLogin} />}
         </Stack.Screen>

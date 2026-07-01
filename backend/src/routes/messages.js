@@ -205,7 +205,7 @@ export async function messageRoutes(app) {
       `SELECT m.id, su.username AS senderUsername,
               CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.ciphertext END AS ciphertext,
               CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.nonce END AS nonce,
-              m.content_type, m.created_at, m.view_once, m.viewed_at,
+              m.content_type, m.created_at, m.view_once, m.viewed_at, m.burn_at,
               m.reply_to_id, m.reply_preview_ciphertext, m.reply_preview_nonce, m.reply_sender,
               (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', mr.ciphertext, 'nonce', mr.nonce)), '[]')
                  FROM message_reactions mr JOIN users ru ON ru.id = mr.user_id WHERE mr.message_id = m.id) AS reactions
@@ -213,6 +213,7 @@ export async function messageRoutes(app) {
        JOIN users su ON su.id = m.sender_id
        WHERE (m.sender_id = $1 AND m.recipient_id = $2)
           OR (m.sender_id = $2 AND m.recipient_id = $1)
+         AND (m.burn_at IS NULL OR m.burn_at > NOW())
        ORDER BY m.created_at ASC
        LIMIT 200`,
       [req.user.userId, otherId]
@@ -231,13 +232,14 @@ export async function messageRoutes(app) {
       `SELECT m.id, u.username AS senderUsername,
               CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.ciphertext END AS ciphertext,
               CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.nonce END AS nonce,
-              m.content_type, m.created_at, m.view_once, m.viewed_at,
+              m.content_type, m.created_at, m.view_once, m.viewed_at, m.burn_at,
               m.reply_to_id, m.reply_preview_ciphertext, m.reply_preview_nonce, m.reply_sender,
               (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', mr.ciphertext, 'nonce', mr.nonce)), '[]')
                  FROM message_reactions mr JOIN users ru ON ru.id = mr.user_id WHERE mr.message_id = m.id) AS reactions
        FROM messages m
        JOIN users u ON u.id = m.sender_id
        WHERE m.recipient_id = $1 AND m.delivered = FALSE
+         AND (m.burn_at IS NULL OR m.burn_at > NOW())
        ORDER BY m.created_at ASC`,
       [req.user.userId]
     )
@@ -558,6 +560,19 @@ export async function messageRoutes(app) {
     )
     if (!rows.length) return reply.code(404).send({ error: 'Not found' })
     return { status: rows[0].status, expiresAt: rows[0].expires_at ?? null }
+  })
+
+  // Set a burn timer on a message the sender owns — server deletes it at burn_at
+  app.post('/messages/:messageId/burn', {
+    schema: { body: { type: 'object', required: ['burnAfterSeconds'], properties: { burnAfterSeconds: { type: 'number' } } } },
+  }, async (req, reply) => {
+    const { rows } = await pool.query(
+      `UPDATE messages SET burn_at = NOW() + ($1 || ' seconds')::interval
+       WHERE id = $2 AND sender_id = $3 RETURNING id, burn_at`,
+      [req.body.burnAfterSeconds, req.params.messageId, req.user.userId]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Not found or not yours' })
+    return { ok: true, burnAt: rows[0].burn_at }
   })
 
   // Recipient confirms they've opened a view-once message — wipes ciphertext server-side

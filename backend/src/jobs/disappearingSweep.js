@@ -4,6 +4,10 @@ import { pool } from '../db/pool.js'
 // either party (1:1) or the sender (groups) has configured for themselves.
 export async function runDisappearingSweep() {
   try {
+    // Per-message burn timers
+    await pool.query(`DELETE FROM messages WHERE burn_at IS NOT NULL AND burn_at <= NOW()`)
+
+    // Global disappearing-messages setting
     await pool.query(`
       DELETE FROM messages m
       USING users s, users r

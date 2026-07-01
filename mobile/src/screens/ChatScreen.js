@@ -38,6 +38,7 @@ export default function ChatScreen({ route, navigation }) {
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [viewOnce, setViewOnce] = useState(false)
   const [viewOnceOpened, setViewOnceOpened] = useState({}) // messageId -> true
+  const [burnPicker, setBurnPicker] = useState(null) // messageId being configured
   const [recipientStatus, setRecipientStatus] = useState(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -470,12 +471,38 @@ export default function ChatScreen({ route, navigation }) {
     inputRef.current?.focus()
   }
 
+  const BURN_OPTIONS = [
+    { label: '1 minute',  seconds: 60 },
+    { label: '1 hour',    seconds: 3600 },
+    { label: '8 hours',   seconds: 28800 },
+    { label: '24 hours',  seconds: 86400 },
+  ]
+
+  async function setBurn(item, seconds) {
+    try {
+      const { burnAt } = await api.post(`/messages/${item.id}/burn`, { burnAfterSeconds: seconds })
+      setMessages(prev => {
+        const next = prev.map(m => m.id === item.id ? { ...m, burn_at: burnAt } : m)
+        saveCache(next)
+        return next
+      })
+    } catch (e) { Alert.alert('Error', e.message) }
+  }
+
   function showMessageActions(item) {
     const buttons = [
       { text: 'Reply', onPress: () => startReply(item) },
       { text: 'React', onPress: () => setShowReactionPicker(item.id) },
     ]
-    if (item.mine) buttons.push({ text: 'Delete', style: 'destructive', onPress: () => confirmDeleteMessage(item) })
+    if (item.mine) {
+      buttons.push({ text: '🔥 Burn after…', onPress: () => {
+        Alert.alert('Burn after', 'Message disappears for both parties after:', [
+          ...BURN_OPTIONS.map(o => ({ text: o.label, onPress: () => setBurn(item, o.seconds) })),
+          { text: 'Cancel', style: 'cancel' },
+        ])
+      }})
+      buttons.push({ text: 'Delete', style: 'destructive', onPress: () => confirmDeleteMessage(item) })
+    }
     buttons.push({ text: 'Cancel', style: 'cancel' })
     Alert.alert('Message', undefined, buttons)
   }
@@ -615,6 +642,16 @@ export default function ChatScreen({ route, navigation }) {
     return d.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })
   }
 
+  function formatBurnTime(iso) {
+    const diff = Math.max(0, new Date(iso) - Date.now())
+    const h = Math.floor(diff / 3600000)
+    const m = Math.floor((diff % 3600000) / 60000)
+    const s = Math.floor((diff % 60000) / 1000)
+    if (h > 0) return `${h}h ${m}m`
+    if (m > 0) return `${m}m ${s}s`
+    return `${s}s`
+  }
+
   function formatTime(iso) {
     if (!iso) return ''
     const d = new Date(iso)
@@ -728,7 +765,7 @@ export default function ChatScreen({ route, navigation }) {
     // View-once: show tap-to-view placeholder if not yet opened
     const isViewOnce = item.view_once
     const alreadyViewed = isViewOnce && (item.viewed_at || viewOnceOpened[item.id])
-    if (isViewOnce && !item.mine) {
+    if (isViewOnce && !item.mine && (isImage || isVideo)) {
       if (alreadyViewed) {
         return (
           <View key={item.id} style={[item.mine ? styles.mineOuter : styles.theirsOuter, { marginVertical: 4 }]}>
@@ -858,6 +895,9 @@ export default function ChatScreen({ route, navigation }) {
           </View>
         )}
         <View style={[styles.tickRow, !item.mine && styles.tickRowTheirs]}>
+          {item.burn_at && new Date(item.burn_at) > new Date() && (
+            <Text style={styles.burnIndicator}>🔥 {formatBurnTime(item.burn_at)}</Text>
+          )}
           {!!item.createdAt && (
             <Text style={styles.timestamp}>{formatTime(item.createdAt)}</Text>
           )}
@@ -1277,6 +1317,7 @@ const styles = StyleSheet.create({
   theirs:        { backgroundColor: '#1f1f1f' },
   bubbleText:    { color: '#fff', lineHeight: 22 },
   saveBtn:       { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 },
+  burnIndicator: { color: '#ff6b00', fontSize: 10, fontWeight: '600' },
   tickRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 2, marginRight: 4 },
   tickRowTheirs: { justifyContent: 'flex-start', marginLeft: 4 },
   timestamp:     { color: '#555', fontSize: 11 },
