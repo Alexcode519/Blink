@@ -55,6 +55,7 @@ export default function ChatsScreen({ navigation }) {
   const [openMenu, setOpenMenu] = useState(null)
   const [openGroupMenu, setOpenGroupMenu] = useState(null)
   const [extendRequest, setExtendRequest] = useState(null) // pending extend request for sender to decide
+  const [pendingInvites, setPendingInvites] = useState([])
   const isFocused = useRef(false)
 
   function loadConversations() {
@@ -68,10 +69,15 @@ export default function ChatsScreen({ navigation }) {
     api.get('/groups').then(({ groups: g }) => setGroups(g)).catch(() => {})
   }
 
+  function loadPendingInvites() {
+    api.get('/invites/pending').then(({ invites }) => setPendingInvites(invites)).catch(() => {})
+  }
+
   useFocusEffect(useCallback(() => {
     isFocused.current = true
     loadConversations()
     loadGroups()
+    loadPendingInvites()
     RNFS.exists(AVATAR_PATH).then(exists => {
       if (exists) setAvatarUri(`file://${AVATAR_PATH}?t=${Date.now()}`)
       else setAvatarUri(null)
@@ -296,6 +302,24 @@ export default function ChatsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
+      {/* Pending verified invites */}
+      {pendingInvites.map(inv => (
+        <TouchableOpacity
+          key={inv.id}
+          style={styles.inviteBanner}
+          onPress={() => navigation.navigate('InviteReview', { invite: inv })}
+        >
+          <View style={styles.inviteBannerLeft}>
+            <Text style={styles.inviteBannerIcon}>🔐</Text>
+            <View>
+              <Text style={styles.inviteBannerTitle}>{inv.senderUsername} sent a verified invite</Text>
+              <Text style={styles.inviteBannerSub}>Tap to compare safety numbers and accept</Text>
+            </View>
+          </View>
+          <Text style={styles.inviteBannerChevron}>›</Text>
+        </TouchableOpacity>
+      ))}
+
       <View style={styles.newChatRow}>
         <TouchableOpacity style={[styles.newChat, { flex: 1 }]} onPress={() => navigation.navigate('FindUser')}>
           <Text style={styles.newChatText}>+ New conversation</Text>
@@ -354,5 +378,11 @@ const styles = StyleSheet.create({
   badgeText:    { color: '#fff', fontSize: 11, fontWeight: '700' },
   requestBadge:     { backgroundColor: '#ff8c0022', borderWidth: 1, borderColor: '#ff8c00', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 8 },
   requestBadgeText: { color: '#ff8c00', fontSize: 10, fontWeight: '700' },
+  inviteBanner:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1a1a2a', borderRadius: 12, marginHorizontal: 16, marginBottom: 8, padding: 14, borderWidth: 1, borderColor: '#4f6ef7' },
+  inviteBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  inviteBannerIcon: { fontSize: 24 },
+  inviteBannerTitle:{ color: '#fff', fontSize: 14, fontWeight: '600' },
+  inviteBannerSub:  { color: '#888', fontSize: 12, marginTop: 2 },
+  inviteBannerChevron: { color: '#4f6ef7', fontSize: 22 },
   hint:         { color: '#555', textAlign: 'center', marginTop: 60, fontSize: 15 },
 })

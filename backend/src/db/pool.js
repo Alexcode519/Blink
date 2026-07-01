@@ -9,6 +9,16 @@ export const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ`).catch(() => {})
 pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ`).catch(() => {})
 pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT`).catch(() => {})
+pool.query(`CREATE TABLE IF NOT EXISTS contact_invites (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  sender_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sender_public_key TEXT NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'pending',
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  expires_at   TIMESTAMPTZ DEFAULT NOW() + INTERVAL '7 days',
+  UNIQUE (sender_id, recipient_id)
+)`).catch(e => console.error('contact_invites migration failed:', e.message))
 pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS view_once BOOLEAN DEFAULT FALSE`).catch(() => {})
 pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ`).catch(() => {})
 pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS burn_at TIMESTAMPTZ`).catch(() => {})
@@ -34,8 +44,9 @@ pool.query(`CREATE TABLE IF NOT EXISTS accepted_contacts (
   user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   contact_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
+  verified_at TIMESTAMPTZ,
   PRIMARY KEY (user_id, contact_id)
-)`)
+)`).then(() => pool.query(`ALTER TABLE accepted_contacts ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`).catch(() => {}))
   .then(() => console.log('accepted_contacts table ready'))
   // Backfill: anyone who has ever sent a message to someone already implicitly
   // "accepted" them — without this, every pre-existing conversation would

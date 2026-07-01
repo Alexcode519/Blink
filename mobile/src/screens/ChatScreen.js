@@ -29,6 +29,7 @@ const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 export default function ChatScreen({ route, navigation }) {
   const { recipientUsername, recipientPublicKey } = route.params
   const [requested, setRequested] = useState(route.params?.requested ?? false)
+  const [verified, setVerified] = useState(false)
   const [messages, setMessages] = useState([])
   const { fontSize } = useFontSize()
   const [text, setText] = useState('')
@@ -106,6 +107,9 @@ export default function ChatScreen({ route, navigation }) {
       .finally(() => pollInbox())
     api.get(`/messages/requests/${recipientUsername}/status`)
       .then(({ requested: r }) => setRequested(!!r))
+      .catch(() => {})
+    api.get(`/invites/verified/${recipientUsername}`)
+      .then(({ verified: v }) => setVerified(!!v))
       .catch(() => {})
     // Mark incoming messages as read and dismiss notification
     api.post(`/messages/read/${recipientUsername}`, {}).catch(() => {})
@@ -1070,7 +1074,10 @@ export default function ChatScreen({ route, navigation }) {
               ? <Image source={{ uri: recipientAvatar }} style={styles.headerAvatar} />
               : <View style={styles.headerAvatarPlaceholder}><Text style={styles.headerAvatarInitial}>{recipientUsername[0]?.toUpperCase()}</Text></View>
             }
-            <Text style={styles.headerTitle}>{recipientUsername}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.headerTitle}>{recipientUsername}</Text>
+              {verified && <Text style={styles.verifiedBadge}>✓</Text>}
+            </View>
           </View>
           {recipientStatus && (
             <Text style={[styles.headerStatus, recipientStatus.isTyping && styles.headerTyping]}>
@@ -1319,6 +1326,7 @@ const styles = StyleSheet.create({
   headerAvatarPlaceholder: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#4f6ef7', alignItems: 'center', justifyContent: 'center' },
   headerAvatarInitial: { color: '#fff', fontSize: 13, fontWeight: '700' },
   headerTitle:         { color: '#fff', fontSize: 17, fontWeight: '600' },
+  verifiedBadge:       { color: '#34c759', fontSize: 13, fontWeight: '700' },
   headerStatus:  { color: '#555', fontSize: 12, marginTop: 1 },
   headerTyping:  { color: '#4f6ef7' },
   backBtn:       { width: 36 },

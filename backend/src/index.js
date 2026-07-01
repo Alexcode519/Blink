@@ -8,6 +8,7 @@ import { landingPage } from './web.js'
 import { userRoutes } from './routes/users.js'
 import { messageRoutes } from './routes/messages.js'
 import { groupRoutes } from './routes/groups.js'
+import { inviteRoutes } from './routes/invites.js'
 import { startDisappearingSweep } from './jobs/disappearingSweep.js'
 
 const app = Fastify({
@@ -40,6 +41,7 @@ await app.register(authRoutes, { prefix: '/auth', config: { rateLimit: { max: 10
 await app.register(userRoutes)
 await app.register(messageRoutes)
 await app.register(groupRoutes)
+await app.register(inviteRoutes)
 
 app.get('/', (req, reply) => reply.type('text/html').send(landingPage))
 app.get('/health', () => ({ ok: true }))
