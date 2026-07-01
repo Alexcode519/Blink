@@ -275,31 +275,28 @@ export default function ChatsScreen({ navigation }) {
         </Pressable>
       )}
       <View style={styles.topRow}>
-        {/* Left: gallery only */}
-        <View style={styles.topLeft}>
-          <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
-            <FeatherIcon />
-          </TouchableOpacity>
-        </View>
+        {/* Blink absolutely centred — unaffected by icon counts on either side */}
+        <Text style={[styles.title, styles.titleCentered]} pointerEvents="none">Blink</Text>
 
-        {/* BLE between gallery and title */}
-        <TouchableOpacity onPress={() => navigation.navigate('BleTest')} style={styles.iconBtn}>
+        {/* Left: gallery then BLE */}
+        <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
+          <FeatherIcon />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate('BleTest')} style={[styles.iconBtn, { marginLeft: 8 }]}>
           <Text style={{ color: '#4f6ef7', fontSize: 11, fontWeight: '700' }}>BLE</Text>
         </TouchableOpacity>
 
-        {/* Center: Blink title — absolutely centred so it ignores side widths */}
-        <Text style={styles.title}>Blink</Text>
+        {/* Spacer pushes profile to the right */}
+        <View style={{ flex: 1 }} />
 
         {/* Right: profile */}
-        <View style={styles.topRight}>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.iconBtn}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.profileThumb} />
-            ) : (
-              <PersonIcon />
-            )}
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.iconBtn}>
+          {avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={styles.profileThumb} />
+          ) : (
+            <PersonIcon />
+          )}
+        </TouchableOpacity>
       </View>
 
       <View style={styles.newChatRow}>
@@ -332,9 +329,8 @@ export default function ChatsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: '#0a0a0a' },
-  topRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 8 },
-  topLeft:      { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  topRight:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flex: 1 },
+  topRow:       { flexDirection: 'row', alignItems: 'center', padding: 20, paddingBottom: 8 },
+  titleCentered:{ position: 'absolute', left: 0, right: 0, textAlign: 'center', zIndex: -1 },
   title:        { fontSize: 28, fontWeight: '700', color: '#fff' },
   iconBtn:      { padding: 4 },
   profileThumb: { width: 28, height: 28, borderRadius: 14 },
