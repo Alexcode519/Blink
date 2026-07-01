@@ -20,6 +20,7 @@ import Icon from 'react-native-vector-icons/Feather'
 import notifee from '@notifee/react-native'
 import { notifIdForSender } from '../notifications/setup'
 import { setActiveChat, clearActiveChat } from '../notifications/activeChat'
+import { extractUrl, fetchLinkPreview } from '../utils/linkPreview'
 
 const POLL_INTERVAL = 3000
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
@@ -39,6 +40,9 @@ export default function ChatScreen({ route, navigation }) {
   const [viewOnce, setViewOnce] = useState(false)
   const [viewOnceOpened, setViewOnceOpened] = useState({}) // messageId -> true
   const [burnPicker, setBurnPicker] = useState(null) // messageId being configured
+  const [linkPreview, setLinkPreview] = useState(null)
+  const [linkPreviewDismissed, setLinkPreviewDismissed] = useState(false)
+  const linkTimer = useRef(null)
   const [recipientStatus, setRecipientStatus] = useState(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -133,11 +137,19 @@ export default function ChatScreen({ route, navigation }) {
 
   function handleTyping(val) {
     setText(val)
-    if (!val.trim()) return
-    // Debounce: send typing event at most once every 2s
-    if (typingTimerRef.current) return
-    api.post(`/users/typing/${recipientUsername}`, {}).catch(() => {})
-    typingTimerRef.current = setTimeout(() => { typingTimerRef.current = null }, 2000)
+    // Typing indicator
+    if (val.trim() && !typingTimerRef.current) {
+      api.post(`/users/typing/${recipientUsername}`, {}).catch(() => {})
+      typingTimerRef.current = setTimeout(() => { typingTimerRef.current = null }, 2000)
+    }
+    // Link preview — debounced 1s after user stops typing
+    if (linkTimer.current) clearTimeout(linkTimer.current)
+    if (!val.trim()) { setLinkPreview(null); setLinkPreviewDismissed(false); return }
+    const url = extractUrl(val)
+    if (!url || linkPreviewDismissed) return
+    linkTimer.current = setTimeout(() => {
+      fetchLinkPreview(url).then(p => { if (p?.title) setLinkPreview(p) })
+    }, 1000)
   }
 
   async function acceptRequest() {
@@ -392,7 +404,8 @@ export default function ChatScreen({ route, navigation }) {
       const uri = await saveMediaFile(tempId, payload, ext)
       if (uri) displayPayload = uri
     }
-    const tempMsg = { id: tempId, from: myUsername, payload: displayPayload, contentType, label, mine: true, status: 'sending', createdAt: new Date().toISOString(), replyTo }
+    const preview = contentType === 'text' && !linkPreviewDismissed ? linkPreview : null
+    const tempMsg = { id: tempId, from: myUsername, payload: displayPayload, contentType, label, mine: true, status: 'sending', createdAt: new Date().toISOString(), replyTo, linkPreview: preview }
     setMessages(prev => [...prev, tempMsg])
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
 
@@ -457,8 +470,10 @@ export default function ChatScreen({ route, navigation }) {
     if (!text.trim()) return
     const msg = text.trim()
     const replyTo = replyingTo
-    setText('')  // clear immediately so it feels instant
+    setText('')
     setReplyingTo(null)
+    setLinkPreview(null)
+    setLinkPreviewDismissed(false)
     await sendPayload(msg, 'text', null, replyTo)
   }
 
@@ -857,18 +872,30 @@ export default function ChatScreen({ route, navigation }) {
               </TouchableOpacity>
             )}
             {!isImage && !isVideo && !isDoc && !isAudio && (
-              <Text style={[styles.bubbleText, { fontSize }]}>
-                {searchQuery.trim() && item.payload?.toLowerCase().includes(searchQuery.toLowerCase())
-                  ? (() => {
-                      const parts = item.payload.split(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
-                      return parts.map((part, i) =>
-                        part.toLowerCase() === searchQuery.toLowerCase()
-                          ? <Text key={i} style={[styles.searchHighlight, { fontSize }]}>{part}</Text>
-                          : part
-                      )
-                    })()
-                  : item.payload}
-              </Text>
+              <>
+                <Text style={[styles.bubbleText, { fontSize }]}>
+                  {searchQuery.trim() && item.payload?.toLowerCase().includes(searchQuery.toLowerCase())
+                    ? (() => {
+                        const parts = item.payload.split(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
+                        return parts.map((part, i) =>
+                          part.toLowerCase() === searchQuery.toLowerCase()
+                            ? <Text key={i} style={[styles.searchHighlight, { fontSize }]}>{part}</Text>
+                            : part
+                        )
+                      })()
+                    : item.payload}
+                </Text>
+                {item.linkPreview && (
+                  <View style={styles.linkBubble}>
+                    {item.linkPreview.image && (
+                      <Image source={{ uri: item.linkPreview.image }} style={styles.linkBubbleImg} resizeMode="cover" />
+                    )}
+                    <Text style={styles.linkBubbleSite}>{item.linkPreview.siteName}</Text>
+                    {item.linkPreview.title && <Text style={styles.linkBubbleTitle}>{item.linkPreview.title}</Text>}
+                    {item.linkPreview.description && <Text style={styles.linkBubbleDesc} numberOfLines={2}>{item.linkPreview.description}</Text>}
+                  </View>
+                )}
+              </>
             )}
             {canSave && (
               <TouchableOpacity onPress={() => requestSave(item)}>
@@ -1173,6 +1200,20 @@ export default function ChatScreen({ route, navigation }) {
             </TouchableOpacity>
           </View>
         )}
+        {linkPreview && !linkPreviewDismissed && (
+          <View style={styles.linkPreviewBar}>
+            {linkPreview.image ? (
+              <Image source={{ uri: linkPreview.image }} style={styles.linkPreviewThumb} />
+            ) : null}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.linkPreviewSite} numberOfLines={1}>{linkPreview.siteName}</Text>
+              <Text style={styles.linkPreviewTitle} numberOfLines={2}>{linkPreview.title}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setLinkPreviewDismissed(true)} style={styles.iconBtn}>
+              <Icon name="x" size={16} color="#555" />
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={styles.inputRow}>
           <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={styles.iconBtn}>
             <Icon name="paperclip" size={22} color="#888" />
@@ -1359,6 +1400,15 @@ const styles = StyleSheet.create({
   replyQuote:       { borderLeftWidth: 3, borderLeftColor: 'rgba(255,255,255,0.5)', paddingLeft: 8, marginBottom: 6 },
   replyQuoteSender: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '700' },
   replyQuoteText:   { color: 'rgba(255,255,255,0.65)', fontSize: 13 },
+  linkPreviewBar:    { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', borderTopWidth: 1, borderTopColor: '#2a2a2a', borderLeftWidth: 3, borderLeftColor: '#4f6ef7', paddingHorizontal: 12, paddingVertical: 8, gap: 10 },
+  linkPreviewThumb:  { width: 44, height: 44, borderRadius: 6 },
+  linkPreviewSite:   { color: '#4f6ef7', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  linkPreviewTitle:  { color: '#fff', fontSize: 13, fontWeight: '500', marginTop: 2 },
+  linkBubble:        { marginTop: 6, backgroundColor: '#1a1a2a', borderRadius: 8, padding: 8, borderLeftWidth: 3, borderLeftColor: '#4f6ef7' },
+  linkBubbleSite:    { color: '#4f6ef7', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+  linkBubbleTitle:   { color: '#fff', fontSize: 13, fontWeight: '500', marginTop: 2 },
+  linkBubbleDesc:    { color: '#888', fontSize: 11, marginTop: 2 },
+  linkBubbleImg:     { width: '100%', height: 120, borderRadius: 6, marginTop: 6 },
   reactionRow:       { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2, marginRight: 4, justifyContent: 'flex-end' },
   reactionRowTheirs: { justifyContent: 'flex-start', marginLeft: 4, marginRight: 0 },
   reactionChip:      { backgroundColor: '#1f1f1f', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: '#2a2a2a' },

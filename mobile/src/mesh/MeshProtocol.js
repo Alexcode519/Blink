@@ -14,6 +14,12 @@
 import { NativeModules } from 'react-native'
 import { getQueue, mergeEntries, dequeue } from './RelayQueue'
 
+const { BleRelayService } = NativeModules
+
+// Start foreground service when relay is active (keeps BLE alive in background)
+export function startRelayService() { BleRelayService?.start() }
+export function stopRelayService()  { BleRelayService?.stop() }
+
 const { BleModule } = NativeModules
 const MAX_PAYLOAD = 480 // leave headroom below 512-byte MTU
 

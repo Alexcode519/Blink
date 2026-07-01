@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getQueue, enqueue, dequeue } from '../mesh/RelayQueue'
-import { onPeerConnected, onData, clearSession } from '../mesh/MeshProtocol'
+import { onPeerConnected, onData, clearSession, startRelayService, stopRelayService } from '../mesh/MeshProtocol'
 import { syncPublicKey } from '../crypto/keys'
 
 const { BleModule } = NativeModules
@@ -184,10 +184,11 @@ export default function BleTestScreen({ navigation }) {
             if (advertising) {
               BleModule.stopAdvertise()
               BleModule.stopScan()
+              stopRelayService()
             } else {
               BleModule.startAdvertise()
               const ok = await requestPermissions()
-              if (ok) BleModule.startScan() // scan simultaneously so we can auto-connect
+              if (ok) { BleModule.startScan(); startRelayService() }
             }
           }}>
           <Text style={styles.btnTxt}>{advertising ? '⏹ Stop' : '📡 Advert+Scan'}</Text>
