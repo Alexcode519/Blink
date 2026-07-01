@@ -330,7 +330,7 @@ export default function ChatsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: '#0a0a0a' },
   topRow:       { flexDirection: 'row', alignItems: 'center', padding: 20, paddingBottom: 8 },
-  titleCentered:{ position: 'absolute', left: 0, right: 0, textAlign: 'center', zIndex: -1 },
+  titleCentered:{ position: 'absolute', left: 0, right: 0, textAlign: 'center' },
   title:        { fontSize: 28, fontWeight: '700', color: '#fff' },
   iconBtn:      { padding: 4 },
   profileThumb: { width: 28, height: 28, borderRadius: 14 },
