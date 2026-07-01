@@ -61,6 +61,7 @@ Ran a time-boxed spike against the real hardware available: a Samsung Galaxy Not
 - Note 9 has full BLE hardware support (`android.hardware.bluetooth_le` confirmed, Bluetooth fully on)
 - Custom Kotlin native module (wrapping `BluetoothLeScanner` + `BluetoothLeAdvertiser` directly, no third-party library) **works** — 5 real nearby BLE devices discovered within 5 seconds of scan start, strongest at -50 dBm. Scan started clean, stopped clean, events fired correctly into React Native JS layer.
 - BLE **advertising** also confirmed: Note 9 successfully broadcasts the Blink service UUID (`0000b11c…`) over real radio — `onStartSuccess` fires, "⏹ Stop Advert" button appears, advertising runs stably until stopped.
+- **Two-device Blink peer discovery CONFIRMED** (Note 9 advertising → Galaxy S9 scanning): S9 found 5 nearby BLE devices within 4 seconds and correctly tagged the Note 9 as `★ BLINK` at -56 dBm — the Blink service UUID was detected and matched. This is the core primitive the mesh relay builds on.
 - Emulator's virtual BLE is radio-isolated from real devices, confirmed: emulator didn't see Note 9's advertisement at all. Two-device testing requires two real phones.
 - Location permission flow works correctly on API 29 — runtime prompt appeared, user-granted, subsequent scans proceed without re-asking.
 - The `react-native-ble-plx` 3.5 library path is blocked by the existing app's build environment (NDK 27 + CMake 3.22 incompatibility). Two distinct blockers hit in sequence:
