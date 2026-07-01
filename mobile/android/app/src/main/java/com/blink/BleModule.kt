@@ -121,6 +121,7 @@ class BleModule(private val reactContext: ReactApplicationContext) :
 
   // ── GATT Client (central role) ────────────────────────────────────────────
   private val gattClients = mutableMapOf<String, BluetoothGatt>()
+  private val writePending = mutableMapOf<String, Promise>() // address → pending promise
 
   @ReactMethod fun connectGatt(address: String) {
     val device = adapter()?.getRemoteDevice(address) ?: return
@@ -152,6 +153,9 @@ class BleModule(private val reactContext: ReactApplicationContext) :
       }
       override fun onCharacteristicWrite(gatt: BluetoothGatt, char: BluetoothGattCharacteristic, status: Int) {
         Log.d("BlinkBle", "onCharacteristicWrite: status=$status for $address")
+        val pending = writePending.remove(address)
+        if (status == BluetoothGatt.GATT_SUCCESS) pending?.resolve(true)
+        else pending?.reject("WRITE_FAILED", "onCharacteristicWrite status=$status")
       }
     }
     val gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
@@ -166,8 +170,10 @@ class BleModule(private val reactContext: ReactApplicationContext) :
     val char = svc.getCharacteristic(BLINK_CHAR) ?: return promise.reject("NO_CHAR", "Blink characteristic not found")
     char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
     char.value = data.toByteArray(Charsets.UTF_8)
+    writePending[address] = promise  // resolved in onCharacteristicWrite after server ACK
     val ok = gatt.writeCharacteristic(char)
-    if (ok) promise.resolve(true) else promise.reject("WRITE_FAILED", "writeCharacteristic returned false")
+    if (!ok) { writePending.remove(address); promise.reject("WRITE_FAILED", "writeCharacteristic returned false") }
+    // If ok=true, promise resolves when onCharacteristicWrite fires (ensures serial writes)
   }
 
   @ReactMethod fun disconnectGatt(address: String) {

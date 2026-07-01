@@ -92,16 +92,15 @@ export async function onData(address, rawData, myKeyHash, onProgress, onDelivere
     }
 
     case 'want': {
-      // Peer wants specific messages from us — send them one by one
-      const session = sessions[address]
-      const queue = session?.queue ?? await getQueue()
+      // Always read fresh — session.queue may be stale if msgs were added after connect
+      const queue = await getQueue()
       const wanted = msg.ids ?? []
       log(`Peer wants ${wanted.length} msgs — sending...`)
       let sent = 0
       for (const id of wanted) {
         const entry = queue.find(e => e.id === id)
-        if (!entry) continue
-        const ok = await write(address, { t: 'msg', ...entry })
+        if (!entry) { log(`${id.slice(0,8)} not found locally`); continue }
+        const ok = await write(address, { t: 'msg', id: entry.id, to: entry.recipientKeyHash, c: entry.ciphertext, n: entry.nonce, ct: entry.contentType, addedAt: entry.addedAt, ttl: entry.ttl })
         if (ok) sent++
       }
       log(`Sent ${sent}/${wanted.length} msgs to peer`)

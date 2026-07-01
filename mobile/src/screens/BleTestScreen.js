@@ -98,10 +98,11 @@ export default function BleTestScreen({ navigation }) {
       // so writeGatt calls in MeshProtocol find the right connection.
       bleEmitter.addListener('BleGattData', e => {
         // Find any currently-connected client address (scan-visible) to use for writes
-        const clientAddr = Object.keys(connectedRef.current).find(addr => connectedRef.current[addr]) ?? e.from
-        addLog(`← Data from ${e.from.slice(-8)} (client: ${clientAddr.slice(-8)}): ${e.data.slice(0, 50)}`)
+        // e.from is the server-side address. We also connectGatt(e.from) in
+        // BleGattClientConnected so gattClients[e.from] exists for writes.
+        addLog(`← Data from ${e.from.slice(-8)}: ${e.data.slice(0, 50)}`)
         onData(
-          clientAddr, e.data, myHashRef.current,
+          e.from, e.data, myHashRef.current,
           addLog,
           (delivered) => {
             addLog(`📨 DELIVERED: ${delivered.id.slice(0, 8)} type=${delivered.contentType}`)
@@ -110,8 +111,12 @@ export default function BleTestScreen({ navigation }) {
         ).then(() => refreshQueue())
       }),
 
-      // Peripheral-role events (a peer connected to our server)
-      bleEmitter.addListener('BleGattClientConnected',    e => addLog(`Peer connected to us: ${e.address.slice(-8)}`)),
+      // Peripheral-role events (a peer connected to our server).
+      // Connect back using the SAME address so gattClients[e.from] works in BleGattData.
+      bleEmitter.addListener('BleGattClientConnected', e => {
+        addLog(`Peer connected to our server: ${e.address.slice(-8)} — connecting back as client`)
+        BleModule.connectGatt(e.address)
+      }),
       bleEmitter.addListener('BleGattClientDisconnected', e => {
         clearSession(e.address)
         addLog(`Peer disconnected: ${e.address.slice(-8)}`)
