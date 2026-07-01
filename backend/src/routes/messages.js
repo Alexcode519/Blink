@@ -18,7 +18,7 @@ export async function messageRoutes(app) {
           ciphertext:             { type: 'string' },
           nonce:                  { type: 'string' },
           contentType:            { type: 'string', enum: ['text', 'image', 'video', 'document', 'audio'] },
-          viewOnce:               { type: 'boolean', nullable: true },
+          viewOnce:               { type: 'boolean' },
           replyToId:              { type: 'string', nullable: true },
           replyPreviewCiphertext: { type: 'string', nullable: true },
           replyPreviewNonce:      { type: 'string', nullable: true },
