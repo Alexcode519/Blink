@@ -53,6 +53,25 @@ Android-only (matches current app scope) simplifies this a lot — iOS backgroun
 - **Phase 3 — Bridge**: reconcile mesh-delivered messages with the server-backed history once connectivity returns; avoid duplicate display if a message arrives both via mesh and later via server sync.
 - **Phase 4 — UX**: opt-in toggle (default off), foreground-service notification, "delivered via mesh" indicator on messages, permission onboarding copy that explains *why* location permission is requested.
 
+## Phase 0 spike — findings (completed)
+
+Ran a time-boxed spike against the real hardware available: a Samsung Galaxy Note 9 (Android 10, API 29, real BLE hardware) and a Pixel 8 emulator (API 34, virtual BLE).
+
+**What was confirmed:**
+- Note 9 has full BLE hardware support (`android.hardware.bluetooth_le` confirmed, Bluetooth fully on)
+- The existing app's build environment (NDK 27 + CMake 3.22) is incompatible with `react-native-ble-plx` 3.5 (New Architecture). Two distinct blockers hit in sequence:
+  1. CMake 3.22's LTO test uses `-fuse-ld=gold` which NDK 27 removed → solved by installing CMake 3.31.6 and pinning it via `local.properties`
+  2. ble-plx 3.5 generates a codegen JNI directory at build time that Gradle's autolinking cmake expects to already exist, creating a circular dependency that no task ordering resolved
+- The emulator's virtual BLE (rootcanal) is isolated from real radio — a real device cannot detect emulator BLE advertisements, making the emulator useless as a BLE test partner
+
+**What this means for next steps:**
+
+Option A (recommended): Use `react-native-ble-plx` **2.x** (pre-New-Architecture). The 2.x branch does not have the codegen/cmake complexity, uses a standard JVM bridge, and is well-tested. Likely builds cleanly without any cmake changes.
+
+Option B: Write a thin custom Kotlin native module wrapping Android's `BluetoothLeScanner` directly (~150 lines of Kotlin + JS bridge). No cmake, no codegen, full control. Most robust long-term.
+
+Either way, actual two-device BLE discovery needs two real Android phones — the emulator cannot substitute.
+
 ## Recommended first step
 
-Phase 0 spike, time-boxed, before committing to the rest. If BLE discovery/connection isn't reliable on the actual test devices in this environment, the whole plan needs rethinking before more design work is worth doing.
+Phase 0 validation with two real phones using either Option A or Option B above before committing to the full mesh routing implementation.
