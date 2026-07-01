@@ -2,10 +2,10 @@ package com.blink
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanResult
-import android.bluetooth.le.ScanSettings
+import android.bluetooth.le.*
 import android.content.Context
+import android.os.ParcelUuid
+import java.util.UUID
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 
@@ -16,6 +16,18 @@ class BleModule(private val reactContext: ReactApplicationContext) :
 
   private val BLINK_UUID = "0000b11c-0000-1000-8000-00805f9b34fb"
   private var scanning = false
+  private var advertising = false
+
+  private val advertiseCallback = object : AdvertiseCallback() {
+    override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
+      advertising = true
+      emit("BleAdvertiseStarted", Arguments.createMap())
+    }
+    override fun onStartFailure(errorCode: Int) {
+      advertising = false
+      emit("BleAdvertiseFailed", Arguments.createMap().apply { putInt("errorCode", errorCode) })
+    }
+  }
 
   private val scanCallback = object : ScanCallback() {
     override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -75,6 +87,43 @@ class BleModule(private val reactContext: ReactApplicationContext) :
       else                       -> "Unknown"
     }
     promise.resolve(state)
+  }
+
+  @ReactMethod
+  fun startAdvertise() {
+    val bm = reactContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+    val adapter = bm?.adapter
+    if (adapter == null || !adapter.isEnabled) {
+      emit("BleAdvertiseFailed", Arguments.createMap().apply { putString("error", "Bluetooth not enabled") })
+      return
+    }
+    if (!adapter.isMultipleAdvertisementSupported) {
+      emit("BleAdvertiseFailed", Arguments.createMap().apply { putString("error", "Advertising not supported on this device") })
+      return
+    }
+    val advertiser = adapter.bluetoothLeAdvertiser
+    if (advertiser == null) {
+      emit("BleAdvertiseFailed", Arguments.createMap().apply { putString("error", "Advertiser unavailable") })
+      return
+    }
+    val settings = AdvertiseSettings.Builder()
+      .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+      .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
+      .setConnectable(false)
+      .build()
+    val data = AdvertiseData.Builder()
+      .addServiceUuid(ParcelUuid(UUID.fromString(BLINK_UUID)))
+      .setIncludeDeviceName(false)
+      .build()
+    advertiser.startAdvertising(settings, data, advertiseCallback)
+  }
+
+  @ReactMethod
+  fun stopAdvertise() {
+    val bm = reactContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+    bm?.adapter?.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback)
+    advertising = false
+    emit("BleAdvertiseStopped", Arguments.createMap())
   }
 
   // Required for RN event emitter

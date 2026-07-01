@@ -12,6 +12,7 @@ const BLINK_UUID = '0000b11c-0000-1000-8000-00805f9b34fb'
 export default function BleTestScreen({ navigation }) {
   const [log, setLog] = useState([])
   const [scanning, setScanning] = useState(false)
+  const [advertising, setAdvertising] = useState(false)
   const [bleState, setBleState] = useState('Unknown')
   const [devices, setDevices] = useState({})
   const scanTimer = useRef(null)
@@ -36,6 +37,9 @@ export default function BleTestScreen({ navigation }) {
       bleEmitter.addListener('BleScanStarted', () => { addLog('Scan started'); setScanning(true) }),
       bleEmitter.addListener('BleScanStopped', () => { addLog('Scan stopped'); setScanning(false) }),
       bleEmitter.addListener('BleScanFailed', e => { addLog(`Scan failed: ${e.error ?? 'code ' + e.errorCode}`); setScanning(false) }),
+      bleEmitter.addListener('BleAdvertiseStarted', () => { addLog('Advertising Blink UUID ★'); setAdvertising(true) }),
+      bleEmitter.addListener('BleAdvertiseStopped', () => { addLog('Advertising stopped'); setAdvertising(false) }),
+      bleEmitter.addListener('BleAdvertiseFailed', e => { addLog(`Advertise failed: ${e.error ?? 'code ' + e.errorCode}`) }),
     ]
     return () => { subs.forEach(s => s.remove()); clearTimeout(scanTimer.current) }
   }, [])
@@ -84,9 +88,17 @@ export default function BleTestScreen({ navigation }) {
       <Text style={styles.title}>BLE Phase 0 — Custom Native Module</Text>
       <Text style={styles.sub}>State: {bleState}  |  Blink UUID: 0000b11c…</Text>
 
-      <TouchableOpacity style={[styles.btn, scanning && styles.btnScanning]} onPress={scanning ? stopScan : startScan}>
-        <Text style={styles.btnText}>{scanning ? '⏹ Stop Scan' : '▶ Start 15s Scan'}</Text>
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+        <TouchableOpacity style={[styles.btn, { flex: 1, marginBottom: 0 }, scanning && styles.btnScanning]} onPress={scanning ? stopScan : startScan}>
+          <Text style={styles.btnText}>{scanning ? '⏹ Stop' : '▶ Scan'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.btn, { flex: 1, marginBottom: 0, backgroundColor: advertising ? '#333' : '#1a4a1a', borderWidth: 1, borderColor: advertising ? '#555' : '#2a8a2a' }]}
+          onPress={() => advertising ? BleModule.stopAdvertise() : BleModule.startAdvertise()}
+        >
+          <Text style={styles.btnText}>{advertising ? '⏹ Stop Advert' : '📡 Advertise'}</Text>
+        </TouchableOpacity>
+      </View>
 
       <Text style={styles.sectionLabel}>
         Nearby BLE devices: {deviceList.length}
