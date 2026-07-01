@@ -427,9 +427,26 @@ export default function ChatScreen({ route, navigation }) {
         return next
       })
     } catch (err) {
-      // Remove the temp message on failure
-      setMessages(prev => prev.filter(m => m.id !== tempId))
-      Alert.alert('Error', err.message)
+      if (err.message?.toLowerCase().includes('network') || err.message?.toLowerCase().includes('fetch') || err.message?.toLowerCase().includes('connect')) {
+        // No internet — queue for mesh relay so it can be delivered offline
+        import('../mesh/MeshBridge').then(({ queueForMeshRelay }) => {
+          encryptForRecipient(typeof payload === 'string' ? payload : JSON.stringify(payload), recipientPublicKeyRef.current)
+            .then(({ ciphertext, nonce }) =>
+              queueForMeshRelay({
+                id: tempId,
+                senderUsername: myUsername,
+                recipientUsername,
+                recipientPublicKey: recipientPublicKeyRef.current,
+                ciphertext, nonce, contentType,
+              })
+            ).catch(() => {})
+        })
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'queued_mesh' } : m))
+        Alert.alert('No internet', 'Message queued for mesh relay — will deliver when a Blink peer is nearby or internet returns.')
+      } else {
+        setMessages(prev => prev.filter(m => m.id !== tempId))
+        Alert.alert('Error', err.message)
+      }
     }
   }
 

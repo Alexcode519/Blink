@@ -8,6 +8,7 @@ import { setupPushNotifications } from '../notifications/setup'
 import { syncPublicKey } from '../crypto/keys'
 import { api } from '../api/client'
 import { pickerGuard } from '../utils/pickerGuard'
+import { startMeshBridge, stopMeshBridge } from '../mesh/MeshBridge'
 import RegisterScreen from '../screens/RegisterScreen'
 import LoginScreen from '../screens/LoginScreen'
 import ChatsScreen from '../screens/ChatsScreen'
@@ -98,6 +99,9 @@ export default function AppNavigator() {
   async function handleLogin() {
     wasBackgroundRef.current = false
     await setupPushNotifications()   // request permissions BEFORE lock listener is active
+    startMeshBridge((bridged, errors) => {
+      if (bridged > 0) console.log(`[MeshBridge] bridged ${bridged} msgs to server (${errors} errors)`)
+    })
     setAuthState('loggedIn')
   }
   function handleLogout() { pendingChatRef.current = null; setAuthState('loggedOut') }

@@ -110,6 +110,59 @@ export async function messageRoutes(app) {
     return { conversations: rows }
   })
 
+  // Receive messages that arrived via BLE mesh relay and bridge them into the
+  // normal server-backed message store. The relaying device (req.user) passes
+  // the original sender's username and recipient's username so we can resolve
+  // their UUIDs and store the message exactly like a normal send.
+  app.post('/messages/mesh-relay', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['messages'],
+        properties: {
+          messages: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['id', 'senderUsername', 'recipientUsername', 'ciphertext', 'nonce', 'contentType'],
+              properties: {
+                id:               { type: 'string' },
+                senderUsername:   { type: 'string' },
+                recipientUsername:{ type: 'string' },
+                ciphertext:       { type: 'string' },
+                nonce:            { type: 'string' },
+                contentType:      { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const results = []
+    for (const msg of req.body.messages) {
+      try {
+        const { rows: sRows } = await pool.query('SELECT id FROM users WHERE username = $1', [msg.senderUsername.toLowerCase()])
+        const { rows: rRows } = await pool.query('SELECT id, fcm_token FROM users WHERE username = $1', [msg.recipientUsername.toLowerCase()])
+        if (!sRows.length || !rRows.length) { results.push({ id: msg.id, ok: false, error: 'user not found' }); continue }
+
+        await pool.query(
+          `INSERT INTO messages (id, sender_id, recipient_id, ciphertext, nonce, content_type)
+           VALUES ($1::uuid, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING`,
+          [msg.id, sRows[0].id, rRows[0].id, msg.ciphertext, msg.nonce, msg.contentType]
+        )
+        await pool.query('INSERT INTO accepted_contacts (user_id, contact_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [sRows[0].id, rRows[0].id])
+        if (rRows[0].fcm_token) {
+          await sendPushNotification(rRows[0].fcm_token, msg.senderUsername, 'Sent you a message (via mesh relay)', { type: 'new_message', senderUsername: msg.senderUsername })
+        }
+        results.push({ id: msg.id, ok: true })
+      } catch (e) {
+        results.push({ id: msg.id, ok: false, error: e.message })
+      }
+    }
+    return { results }
+  })
+
   // Whether this contact is still a pending "message request" for the current user
   app.get('/messages/requests/:username/status', async (req, reply) => {
     const { rows: other } = await pool.query(
