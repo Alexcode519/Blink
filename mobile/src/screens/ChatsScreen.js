@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Alert, Pressable } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useFocusEffect } from '@react-navigation/native'
 import Svg, { Path, Line, Circle, Polyline, Rect, G } from 'react-native-svg'
 import RNFS from 'react-native-fs'
@@ -58,15 +59,24 @@ export default function ChatsScreen({ navigation }) {
   const [pendingInvites, setPendingInvites] = useState([])
   const isFocused = useRef(false)
 
+  const CACHE_KEY_CONVS   = 'blink_cache_conversations'
+  const CACHE_KEY_GROUPS  = 'blink_cache_groups'
+
   function loadConversations() {
     api.get('/messages/conversations')
-      .then(({ conversations: c }) => setConversations(c))
+      .then(({ conversations: c }) => {
+        setConversations(c)
+        AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(c)).catch(() => {})
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }
 
   function loadGroups() {
-    api.get('/groups').then(({ groups: g }) => setGroups(g)).catch(() => {})
+    api.get('/groups').then(({ groups: g }) => {
+      setGroups(g)
+      AsyncStorage.setItem(CACHE_KEY_GROUPS, JSON.stringify(g)).catch(() => {})
+    }).catch(() => {})
   }
 
   function loadPendingInvites() {
@@ -75,9 +85,21 @@ export default function ChatsScreen({ navigation }) {
 
   useFocusEffect(useCallback(() => {
     isFocused.current = true
-    loadConversations()
-    loadGroups()
-    loadPendingInvites()
+
+    // Show cached data immediately so the screen is never blank
+    Promise.all([
+      AsyncStorage.getItem(CACHE_KEY_CONVS),
+      AsyncStorage.getItem(CACHE_KEY_GROUPS),
+    ]).then(([cachedC, cachedG]) => {
+      if (cachedC) { setConversations(JSON.parse(cachedC)); setLoading(false) }
+      if (cachedG)   setGroups(JSON.parse(cachedG))
+    }).catch(() => {}).finally(() => {
+      // Always refresh from network (silently if cache was shown)
+      loadConversations()
+      loadGroups()
+      loadPendingInvites()
+    })
+
     RNFS.exists(AVATAR_PATH).then(exists => {
       if (exists) setAvatarUri(`file://${AVATAR_PATH}?t=${Date.now()}`)
       else setAvatarUri(null)

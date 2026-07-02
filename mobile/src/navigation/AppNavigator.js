@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import messaging from '@react-native-firebase/messaging'
 import { setupPushNotifications } from '../notifications/setup'
 import { syncPublicKey } from '../crypto/keys'
-import { api } from '../api/client'
+import { api, initToken } from '../api/client'
 import { pickerGuard } from '../utils/pickerGuard'
 import { startMeshBridge, stopMeshBridge } from '../mesh/MeshBridge'
 import RegisterScreen from '../screens/RegisterScreen'
@@ -45,6 +45,7 @@ export default function AppNavigator() {
 
   useEffect(() => {
     async function check() {
+      await initToken()   // warm the token cache before any API call
       try {
         const initial = await messaging().getInitialNotification()
         if (initial?.data?.type === 'new_group_message' && initial?.data?.groupId) {

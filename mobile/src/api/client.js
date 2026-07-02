@@ -3,6 +3,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 const BASE_URL = 'https://creative-recreation-production-41a9.up.railway.app'
 const TIMEOUT_MS = 15000
 
+// In-memory token cache — avoids an AsyncStorage read on every request
+let _token = null
+
+export async function initToken() {
+  _token = await AsyncStorage.getItem('token')
+}
+export function setToken(tok) {
+  _token = tok
+  if (tok) AsyncStorage.setItem('token', tok).catch(() => {})
+  else AsyncStorage.removeItem('token').catch(() => {})
+}
+export function clearToken() { _token = null; AsyncStorage.removeItem('token').catch(() => {}) }
+
 function fetchWithTimeout(url, options) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
@@ -11,7 +24,8 @@ function fetchWithTimeout(url, options) {
 }
 
 async function request(method, path, body) {
-  const token = await AsyncStorage.getItem('token')
+  // Fall back to AsyncStorage if module just loaded and initToken not yet called
+  const token = _token ?? await AsyncStorage.getItem('token')
   try {
     const res = await fetchWithTimeout(`${BASE_URL}${path}`, {
       method,

@@ -78,34 +78,37 @@ export async function messageRoutes(app) {
   // Get recent conversations (distinct users this user has chatted with)
   app.get('/messages/conversations', async (req) => {
     const { rows } = await pool.query(
-      `SELECT DISTINCT ON (other_user)
-        other_user,
-        other_username,
-        other_public_key,
-        other_avatar,
-        last_at,
-        (
-          SELECT COUNT(*) FROM messages um
-          WHERE um.sender_id = other_user
-            AND um.recipient_id = $1
-            AND um.read_at IS NULL
-        ) AS unread_count,
-        NOT EXISTS (
-          SELECT 1 FROM accepted_contacts ac WHERE ac.user_id = $1 AND ac.contact_id = other_user
-        ) AS requested
-       FROM (
-         SELECT
-           CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END AS other_user,
-           CASE WHEN m.sender_id = $1 THEN ru.username ELSE su.username END AS other_username,
-           CASE WHEN m.sender_id = $1 THEN ru.public_key ELSE su.public_key END AS other_public_key,
-           CASE WHEN m.sender_id = $1 THEN ru.avatar ELSE su.avatar END AS other_avatar,
-           m.created_at AS last_at
-         FROM messages m
-         JOIN users su ON su.id = m.sender_id
-         JOIN users ru ON ru.id = m.recipient_id
-         WHERE m.sender_id = $1 OR m.recipient_id = $1
-       ) t
-       ORDER BY other_user, last_at DESC`,
+      `WITH unread AS (
+         SELECT sender_id AS other_user, COUNT(*) AS cnt
+         FROM messages
+         WHERE recipient_id = $1 AND read_at IS NULL
+         GROUP BY sender_id
+       ),
+       contacts AS (
+         SELECT contact_id FROM accepted_contacts WHERE user_id = $1
+       )
+       SELECT * FROM (
+         SELECT DISTINCT ON (other_user)
+           other_user, other_username, other_public_key, other_avatar, last_at,
+           COALESCE(u.cnt, 0) AS unread_count,
+           (c.contact_id IS NULL) AS requested
+         FROM (
+           SELECT
+             CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END AS other_user,
+             CASE WHEN m.sender_id = $1 THEN ru.username ELSE su.username END AS other_username,
+             CASE WHEN m.sender_id = $1 THEN ru.public_key ELSE su.public_key END AS other_public_key,
+             CASE WHEN m.sender_id = $1 THEN ru.avatar ELSE su.avatar END AS other_avatar,
+             m.created_at AS last_at
+           FROM messages m
+           JOIN users su ON su.id = m.sender_id
+           JOIN users ru ON ru.id = m.recipient_id
+           WHERE m.sender_id = $1 OR m.recipient_id = $1
+         ) t
+         LEFT JOIN unread u ON u.other_user = t.other_user
+         LEFT JOIN contacts c ON c.contact_id = t.other_user
+         ORDER BY other_user, last_at DESC
+       ) convs
+       ORDER BY last_at DESC`,
       [req.user.userId]
     )
     return { conversations: rows }
