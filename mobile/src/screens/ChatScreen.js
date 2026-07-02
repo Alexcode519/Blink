@@ -327,6 +327,14 @@ export default function ChatScreen({ route, navigation }) {
           const extras = await decodeExtras(m)
           return { id: m.id, from: sender, payload, contentType, label, mine: true, status, createdAt: m.created_at, ...extras }
         }
+        // Check for pre-decrypted view-once file (fetched during push notification)
+        if (m.view_once && !m.viewed_at && (m.content_type === 'image' || m.content_type === 'video')) {
+          const prefetched = await AsyncStorage.getItem(`blink_vo_${m.id}`)
+          if (prefetched) {
+            const extras = await decodeExtras(m)
+            return { id: m.id, from: sender, payload: prefetched, contentType: m.content_type, mine: false, status: 'delivered', createdAt: m.created_at, view_once: true, viewed_at: null, ...extras }
+          }
+        }
         try {
           let keyToUse = recipientPublicKeyRef.current
           let payload
@@ -376,6 +384,14 @@ export default function ChatScreen({ route, navigation }) {
       const decrypted = await Promise.all(
         incoming.map(async (m) => {
           const sender = m.senderusername ?? m.senderUsername ?? ''
+          // Check for pre-decrypted view-once file (fetched during push notification)
+          if (m.view_once && !m.viewed_at && (m.content_type === 'image' || m.content_type === 'video')) {
+            const prefetched = await AsyncStorage.getItem(`blink_vo_${m.id}`)
+            if (prefetched) {
+              const extras = await decodeExtras(m)
+              return { id: m.id, from: sender, payload: prefetched, contentType: m.content_type, mine: false, status: 'delivered', createdAt: m.created_at, view_once: true, viewed_at: null, ...extras }
+            }
+          }
           try {
             let keyToUse = recipientPublicKeyRef.current
             let payload
@@ -815,6 +831,7 @@ export default function ChatScreen({ route, navigation }) {
     setViewingOnceItem(null)
     if (!item) return
     setViewOnceOpened(prev => ({ ...prev, [item.id]: true }))
+    AsyncStorage.removeItem(`blink_vo_${item.id}`).catch(() => {})
     try { await api.post(`/messages/${item.id}/viewed`, {}) } catch {}
     setMessages(prev => {
       const next = prev.map(m => m.id === item.id ? { ...m, viewed_at: new Date().toISOString() } : m)

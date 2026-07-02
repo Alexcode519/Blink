@@ -69,7 +69,7 @@ export async function messageRoutes(app) {
       recipient.fcm_token,
       senders[0]?.username ?? 'Someone',
       contentType === 'text' ? 'Sent you a message' : `Sent you a ${typeLabel}`,
-      { type: 'new_message', senderUsername: senders[0]?.username ?? '' }
+      { type: 'new_message', senderUsername: senders[0]?.username ?? '', messageId: rows[0].id, contentType, viewOnce: String(viewOnce ?? false) }
     )
 
     return { messageId: rows[0].id, createdAt: rows[0].created_at }
