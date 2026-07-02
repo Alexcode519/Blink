@@ -158,6 +158,22 @@ export async function inviteRoutes(app) {
     return { token: rows[0].id, expiresAt: rows[0].expires_at }
   })
 
+  // ── QR invite: poll status (owner checks if their code has been claimed) ───
+  app.get('/invites/qr/:token/status', async (req, reply) => {
+    const { rows } = await pool.query(
+      `SELECT q.claimed_by, u.username AS claimer_username
+       FROM qr_invites q
+       LEFT JOIN users u ON u.id = q.claimed_by
+       WHERE q.id = $1 AND q.owner_id = $2`,
+      [req.params.token, req.user.userId]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Not found' })
+    return {
+      claimed: !!rows[0].claimed_by,
+      claimerUsername: rows[0].claimer_username ?? null,
+    }
+  })
+
   // ── QR invite: claim — mutual verify + create accepted_contacts ──────────
   app.post('/invites/qr/claim', {
     schema: {
