@@ -327,7 +327,7 @@ export default function GroupChatScreen({ route, navigation }) {
   // ── Attachments ─────────────────────────────────────────────────────────────
   async function pickImage(useCamera) {
     setShowAttachMenu(false)
-    pickerGuard.begin()
+    pickerGuard.start()
     try {
       const result = useCamera
         ? await launchCamera({ mediaType: 'photo', quality: 0.7, includeBase64: true })
@@ -344,7 +344,7 @@ export default function GroupChatScreen({ route, navigation }) {
 
   async function pickDocument() {
     setShowAttachMenu(false)
-    pickerGuard.begin()
+    pickerGuard.start()
     try {
       const [file] = await pick({ type: [types.allFiles] })
       if (!file) return
