@@ -33,9 +33,15 @@ const screenOpts = { headerShown: false, contentStyle: { backgroundColor: '#0a0a
 
 export default function AppNavigator() {
   const [authState, setAuthState] = useState(null)
+  const [initialRoute, setInitialRoute] = useState(null)
   const pendingChatRef = useRef(null)
   const appStateRef = useRef(AppState.currentState)
   const wasBackgroundRef = useRef(false)
+
+  // Load onboarding state at top level so hooks are never conditional
+  useEffect(() => {
+    AsyncStorage.getItem('blink_onboarded').then(v => setInitialRoute(v ? 'Login' : 'Onboarding'))
+  }, [])
 
   useEffect(() => {
     async function check() {
@@ -169,11 +175,6 @@ export default function AppNavigator() {
   }
 
   // loggedOut
-  // Determine initial route: show onboarding on first ever launch
-  const [initialRoute, setInitialRoute] = React.useState(null)
-  React.useEffect(() => {
-    AsyncStorage.getItem('blink_onboarded').then(v => setInitialRoute(v ? 'Login' : 'Onboarding'))
-  }, [])
   if (!initialRoute) return null
 
   return (
