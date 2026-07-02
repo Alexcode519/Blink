@@ -219,8 +219,8 @@ export async function messageRoutes(app) {
 
     const { rows } = await pool.query(
       `SELECT m.id, su.username AS senderUsername,
-              CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.ciphertext END AS ciphertext,
-              CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.nonce END AS nonce,
+              CASE WHEN m.view_once AND m.content_type IN ('image','video') THEN NULL ELSE m.ciphertext END AS ciphertext,
+              CASE WHEN m.view_once AND m.content_type IN ('image','video') THEN NULL ELSE m.nonce END AS nonce,
               m.content_type, m.created_at, m.view_once, m.viewed_at, m.burn_at,
               m.reply_to_id, m.reply_preview_ciphertext, m.reply_preview_nonce, m.reply_sender,
               (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', mr.ciphertext, 'nonce', mr.nonce)), '[]')
@@ -246,8 +246,8 @@ export async function messageRoutes(app) {
   app.get('/messages/inbox', async (req) => {
     const { rows } = await pool.query(
       `SELECT m.id, u.username AS senderUsername,
-              CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.ciphertext END AS ciphertext,
-              CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.nonce END AS nonce,
+              CASE WHEN m.view_once AND m.content_type IN ('image','video') THEN NULL ELSE m.ciphertext END AS ciphertext,
+              CASE WHEN m.view_once AND m.content_type IN ('image','video') THEN NULL ELSE m.nonce END AS nonce,
               m.content_type, m.created_at, m.view_once, m.viewed_at, m.burn_at,
               m.reply_to_id, m.reply_preview_ciphertext, m.reply_preview_nonce, m.reply_sender,
               (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', mr.ciphertext, 'nonce', mr.nonce)), '[]')
@@ -598,6 +598,17 @@ export async function messageRoutes(app) {
     )
     if (!rows.length) return reply.code(404).send({ error: 'Not found or not yours' })
     return { ok: true, burnAt: rows[0].burn_at }
+  })
+
+  // Fetch ciphertext for a view-once message (recipient only, unviewed only)
+  app.get('/messages/:messageId/ciphertext', async (req, reply) => {
+    const { rows } = await pool.query(
+      `SELECT ciphertext, nonce FROM messages
+       WHERE id = $1 AND recipient_id = $2 AND view_once = TRUE AND viewed_at IS NULL`,
+      [req.params.messageId, req.user.userId]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Not found or already viewed' })
+    return { ciphertext: rows[0].ciphertext, nonce: rows[0].nonce }
   })
 
   // Recipient confirms they've opened a view-once message — wipes ciphertext server-side

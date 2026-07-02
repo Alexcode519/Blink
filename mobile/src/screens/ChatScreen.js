@@ -26,6 +26,17 @@ const POLL_INTERVAL = 3000
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
+// Memoized so polling re-renders don't remount the video player and cause flickering
+const VideoPreview = React.memo(({ uri, style }) => (
+  <Video
+    source={{ uri }}
+    style={style}
+    controls
+    resizeMode="cover"
+    paused
+  />
+))
+
 export default function ChatScreen({ route, navigation }) {
   const { recipientUsername, recipientPublicKey } = route.params
   const [requested, setRequested] = useState(route.params?.requested ?? false)
@@ -608,12 +619,13 @@ export default function ChatScreen({ route, navigation }) {
       }
     }
     pickerGuard.start()
-    const result = await launchCamera({ mediaType: 'video', videoQuality: 'high', includeBase64: false })
+    const result = await launchCamera({ mediaType: 'video', videoQuality: 'low', includeBase64: false, durationLimit: 60 })
     pickerGuard.end()
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
     const base64 = await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
-    await sendPayload(base64, 'video', asset.fileName ?? 'video')
+    const vo = viewOnce; setViewOnce(false)
+    await sendPayload(base64, 'video', asset.fileName ?? 'video', null, vo)
   }
 
   async function pickDocument() {
@@ -626,7 +638,8 @@ export default function ChatScreen({ route, navigation }) {
       const base64 = await RNFS.readFile(uri, 'base64')
       const mime = result.type ?? ''
       const contentType = mime.startsWith('image/') ? 'image' : mime.startsWith('video/') ? 'video' : 'document'
-      await sendPayload(base64, contentType, result.name ?? 'file')
+      const vo = viewOnce; setViewOnce(false)
+      await sendPayload(base64, contentType, result.name ?? 'file', null, vo)
     } catch (err) {
       pickerGuard.end()
       if (!isCancel(err)) Alert.alert('Error', err.message)
@@ -780,8 +793,20 @@ export default function ChatScreen({ route, navigation }) {
     }
   }
 
-  function openViewOnce(item) {
-    // Show full-screen modal first — mark as viewed only when dismissed
+  async function openViewOnce(item) {
+    // Payload is null for unviewed view-once media — fetch ciphertext on demand
+    if (!item.payload && (item.contentType === 'image' || item.contentType === 'video')) {
+      try {
+        const { ciphertext, nonce } = await api.get(`/messages/${item.id}/ciphertext`)
+        let decoded = await decryptFromSender(ciphertext, nonce, recipientPublicKeyRef.current)
+        const ext = item.contentType === 'image' ? 'jpg' : 'mp4'
+        const uri = await saveMediaFile(`vo_${item.id}`, decoded, ext)
+        item = { ...item, payload: uri ?? decoded }
+      } catch (e) {
+        Alert.alert('Error', 'Could not load media: ' + e.message)
+        return
+      }
+    }
     setViewingOnceItem(item)
   }
 
@@ -875,12 +900,9 @@ export default function ChatScreen({ route, navigation }) {
               />
             )}
             {isVideo && (
-              <Video
-                source={{ uri: item.payload.startsWith('file://') ? item.payload : `file://${item.payload}` }}
+              <VideoPreview
+                uri={item.payload.startsWith('file://') ? item.payload : `file://${item.payload}`}
                 style={styles.videoPreview}
-                controls
-                resizeMode="cover"
-                paused
               />
             )}
             {isDoc && (

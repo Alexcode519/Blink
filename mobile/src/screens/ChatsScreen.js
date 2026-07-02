@@ -59,6 +59,7 @@ export default function ChatsScreen({ navigation }) {
   const [extendRequest, setExtendRequest] = useState(null) // pending extend request for sender to decide
   const [pendingInvites, setPendingInvites] = useState([])
   const isFocused = useRef(false)
+  const [localUnread, setLocalUnread] = useState({}) // username -> count, incremented on FCM arrival
 
   const CACHE_KEY_CONVS   = 'blink_cache_conversations'
   const CACHE_KEY_GROUPS  = 'blink_cache_groups'
@@ -119,8 +120,12 @@ export default function ChatsScreen({ navigation }) {
         .then(({ requests }) => { if (requests.length && !extendRequest) setExtendRequest(requests[0]) })
         .catch(() => {})
     }, 3000)
-    // Immediately refresh when a foreground message arrives so badge appears instantly
-    const unsubFCM = messaging().onMessage(() => {
+    // Immediately update local badge count when a foreground message arrives
+    const unsubFCM = messaging().onMessage((msg) => {
+      const sender = msg?.data?.senderUsername
+      if (sender) {
+        setLocalUnread(prev => ({ ...prev, [sender]: (prev[sender] ?? 0) + 1 }))
+      }
       if (isFocused.current) loadConversations()
     })
     return () => { clearInterval(timer); unsubFCM() }
@@ -234,7 +239,7 @@ export default function ChatsScreen({ navigation }) {
       <View style={styles.row}>
         <TouchableOpacity
           style={styles.rowMain}
-          onPress={() => { setOpenMenu(null); navigation.navigate('Chat', { recipientUsername: u, recipientPublicKey: item.other_public_key, requested: item.requested }) }}
+          onPress={() => { setOpenMenu(null); setLocalUnread(prev => ({ ...prev, [u]: 0 })); navigation.navigate('Chat', { recipientUsername: u, recipientPublicKey: item.other_public_key, requested: item.requested }) }}
         >
           {item.other_avatar
             ? <Image source={{ uri: `data:image/jpeg;base64,${item.other_avatar}` }} style={styles.avatarImg} />
@@ -246,9 +251,9 @@ export default function ChatsScreen({ navigation }) {
               <Text style={styles.requestBadgeText}>Request</Text>
             </View>
           )}
-          {Number(item.unread_count) > 0 && (
+          {(Number(item.unread_count) + (localUnread[u] ?? 0)) > 0 && (
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{Number(item.unread_count) > 99 ? '99+' : item.unread_count}</Text>
+              <Text style={styles.badgeText}>{(Number(item.unread_count) + (localUnread[u] ?? 0)) > 99 ? '99+' : (Number(item.unread_count) + (localUnread[u] ?? 0))}</Text>
             </View>
           )}
         </TouchableOpacity>
