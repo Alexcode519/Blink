@@ -287,7 +287,7 @@ export async function messageRoutes(app) {
   // Sender polls for pending save requests on their sent messages
   app.get('/messages/save-requests/pending', async (req) => {
     const { rows } = await pool.query(
-      `SELECT sr.id, sr.message_id, u.username AS requesterUsername, m.content_type
+      `SELECT sr.id, sr.message_id, u.username AS "requesterUsername", m.content_type
        FROM save_requests sr
        JOIN messages m ON m.id = sr.message_id
        JOIN users u ON u.id = m.recipient_id
