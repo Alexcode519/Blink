@@ -327,6 +327,13 @@ export default function GroupChatScreen({ route, navigation }) {
   // ── Attachments ─────────────────────────────────────────────────────────────
   async function pickImage(useCamera) {
     setShowAttachMenu(false)
+    if (useCamera && PermissionsAndroid) {
+      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA)
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert('Permission denied', 'Camera permission is required to take photos.')
+        return
+      }
+    }
     pickerGuard.start()
     try {
       const result = useCamera
