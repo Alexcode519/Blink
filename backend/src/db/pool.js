@@ -65,6 +65,15 @@ pool.query(`CREATE TABLE IF NOT EXISTS blocked_users (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (blocker_id, blocked_id)
 )`).then(() => console.log('blocked_users table ready')).catch(e => console.error('blocked_users migration failed:', e.message))
+pool.query(`CREATE TABLE IF NOT EXISTS qr_invites (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  public_key   TEXT NOT NULL,
+  claimed_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+  claimed_at   TIMESTAMPTZ,
+  expires_at   TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '10 minutes',
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+)`).then(() => console.log('qr_invites table ready')).catch(e => console.error('qr_invites migration failed:', e.message))
 
 // Chained sequentially: group_members/group_reads/group_messages have FKs into
 // groups, and unchained pool.query() calls can land on different pool

@@ -143,6 +143,84 @@ export async function inviteRoutes(app) {
     return { ok: true }
   })
 
+  // ── QR invite: generate a single-use token ──────────────────────────────
+  app.post('/invites/qr', async (req, reply) => {
+    const { rows: me } = await pool.query(
+      'SELECT public_key FROM users WHERE id = $1',
+      [req.user.userId]
+    )
+    if (!me.length) return reply.code(404).send({ error: 'User not found' })
+    const { rows } = await pool.query(
+      `INSERT INTO qr_invites (owner_id, public_key)
+       VALUES ($1, $2) RETURNING id, expires_at`,
+      [req.user.userId, me[0].public_key]
+    )
+    return { token: rows[0].id, expiresAt: rows[0].expires_at }
+  })
+
+  // ── QR invite: claim — mutual verify + create accepted_contacts ──────────
+  app.post('/invites/qr/claim', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['token'],
+        properties: { token: { type: 'string' } },
+      },
+    },
+  }, async (req, reply) => {
+    const { token } = req.body
+    const claimerId = req.user.userId
+
+    const { rows } = await pool.query(
+      `UPDATE qr_invites
+       SET claimed_by = $1, claimed_at = NOW()
+       WHERE id = $2
+         AND claimed_by IS NULL
+         AND expires_at > NOW()
+         AND owner_id <> $1
+       RETURNING owner_id, public_key`,
+      [claimerId, token]
+    )
+    if (!rows.length) return reply.code(400).send({ error: 'QR code is invalid, expired, or already used.' })
+
+    const ownerId = rows[0].owner_id
+    const ownerPublicKey = rows[0].public_key
+
+    // Mutual verified contact
+    await pool.query(
+      `INSERT INTO accepted_contacts (user_id, contact_id, verified_at)
+       VALUES ($1, $2, NOW()), ($2, $1, NOW())
+       ON CONFLICT (user_id, contact_id)
+       DO UPDATE SET verified_at = COALESCE(accepted_contacts.verified_at, NOW())`,
+      [claimerId, ownerId]
+    )
+
+    const { rows: owner } = await pool.query(
+      'SELECT username, fcm_token FROM users WHERE id = $1',
+      [ownerId]
+    )
+    const { rows: claimer } = await pool.query(
+      'SELECT username, public_key FROM users WHERE id = $1',
+      [claimerId]
+    )
+
+    // Notify the QR owner that someone scanned and verified them
+    if (owner[0]?.fcm_token) {
+      await sendPushNotification(
+        owner[0].fcm_token,
+        claimer[0]?.username ?? 'Someone',
+        'scanned your QR code and is now a verified contact ✓',
+        { type: 'qr_claimed', claimerUsername: claimer[0]?.username ?? '' }
+      )
+    }
+
+    return {
+      ownerUsername: owner[0]?.username,
+      ownerPublicKey,
+      claimerPublicKey: claimer[0]?.public_key,
+    }
+  })
+
   // Check verification status for a specific contact
   app.get('/invites/verified/:username', async (req) => {
     const { rows: other } = await pool.query(
