@@ -46,6 +46,20 @@ await app.register(inviteRoutes)
 app.get('/', (req, reply) => reply.type('text/html').send(landingPage))
 app.get('/health', () => ({ ok: true }))
 
+// Android App Links verification
+app.get('/.well-known/assetlinks.json', (req, reply) => {
+  reply.type('application/json').send([{
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: {
+      namespace: 'android_app',
+      package_name: 'com.blink',
+      sha256_cert_fingerprints: [
+        '24:64:65:9E:D0:5A:7F:4D:91:5D:C0:C5:C7:B5:5A:ED:51:30:C8:F4:B3:09:43:2A:04:DB:1F:30:F6:6E:A7:0A'
+      ]
+    }
+  }])
+})
+
 // QR invite redirect — opens app if installed, Play Store if not
 app.get('/invite/:token', (req, reply) => {
   const { token } = req.params

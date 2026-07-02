@@ -52,6 +52,18 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
+        <intent-filter android:label="Blink invite">
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="blink" android:host="invite" />
+        </intent-filter>
+        <intent-filter android:autoVerify="true" android:label="Blink invite link">
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" android:host="creative-recreation-production-41a9.up.railway.app" android:pathPrefix="/invite/" />
+        </intent-filter>
       </activity>
       <service
         android:name=".BleRelayService"
