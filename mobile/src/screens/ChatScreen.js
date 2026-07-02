@@ -345,7 +345,7 @@ export default function ChatScreen({ route, navigation }) {
           }
           const ct = m.content_type
           if (ct === 'image' || ct === 'video' || ct === 'audio') {
-            const ext = ct === 'image' ? 'jpg' : ct === 'video' ? 'mp4' : 'mp4'
+            const ext = ct === 'image' ? 'jpg' : 'mp4'
             const uri = await saveMediaFile(m.id, payload, ext)
             if (uri) payload = uri
           }
