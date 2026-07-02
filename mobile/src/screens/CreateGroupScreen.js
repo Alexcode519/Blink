@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, Alert, ActivityIndicator,
+  View, Text, TextInput, TouchableOpacity, ScrollView,
+  StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import nacl from 'tweetnacl'
@@ -72,74 +72,84 @@ export default function CreateGroupScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-        <Text style={styles.backText}>← Back</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.title}>New Group</Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Group name"
-        placeholderTextColor="#555"
-        value={groupName}
-        onChangeText={setGroupName}
-        maxLength={50}
-      />
-
-      <View style={styles.addRow}>
-        <TextInput
-          style={[styles.input, { flex: 1, marginBottom: 0 }]}
-          placeholder="Add member by username"
-          placeholderTextColor="#555"
-          value={search}
-          onChangeText={setSearch}
-          autoCapitalize="none"
-          onSubmitEditing={addMember}
-          returnKeyType="done"
-        />
-        <TouchableOpacity style={styles.addBtn} onPress={addMember} disabled={adding}>
-          {adding ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.addBtnText}>Add</Text>}
-        </TouchableOpacity>
-      </View>
-
-      {selected.length > 0 && (
-        <View style={styles.memberList}>
-          <Text style={styles.memberListLabel}>Members ({selected.length + 1})</Text>
-          <View style={styles.youChip}>
-            <Text style={styles.youChipText}>You (admin)</Text>
-          </View>
-          {selected.map(u => (
-            <View key={u.username} style={styles.memberRow}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{u.username[0].toUpperCase()}</Text>
-              </View>
-              <Text style={styles.memberName}>{u.username}</Text>
-              <TouchableOpacity onPress={() => removeMember(u.username)} style={styles.removeBtn}>
-                <Text style={styles.removeText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-      )}
-
-      <TouchableOpacity
-        style={[styles.createBtn, (creating || !groupName.trim() || selected.length === 0) && styles.createBtnDisabled]}
-        onPress={createGroup}
-        disabled={creating || !groupName.trim() || selected.length === 0}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: '#0a0a0a' }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
       >
-        {creating
-          ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.createBtnText}>Create Group</Text>
-        }
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.title}>New Group</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Group name"
+          placeholderTextColor="#555"
+          value={groupName}
+          onChangeText={setGroupName}
+          maxLength={50}
+        />
+
+        <View style={styles.addRow}>
+          <TextInput
+            style={[styles.input, { flex: 1, marginBottom: 0 }]}
+            placeholder="Add member by username"
+            placeholderTextColor="#555"
+            value={search}
+            onChangeText={setSearch}
+            autoCapitalize="none"
+            onSubmitEditing={addMember}
+            returnKeyType="done"
+          />
+          <TouchableOpacity style={styles.addBtn} onPress={addMember} disabled={adding}>
+            {adding ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.addBtnText}>Add</Text>}
+          </TouchableOpacity>
+        </View>
+
+        {selected.length > 0 && (
+          <View style={styles.memberList}>
+            <Text style={styles.memberListLabel}>Members ({selected.length + 1})</Text>
+            <View style={styles.youChip}>
+              <Text style={styles.youChipText}>You (admin)</Text>
+            </View>
+            {selected.map(u => (
+              <View key={u.username} style={styles.memberRow}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{u.username[0].toUpperCase()}</Text>
+                </View>
+                <Text style={styles.memberName}>{u.username}</Text>
+                <TouchableOpacity onPress={() => removeMember(u.username)} style={styles.removeBtn}>
+                  <Text style={styles.removeText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={[styles.createBtn, (creating || !groupName.trim() || selected.length === 0) && styles.createBtnDisabled]}
+          onPress={createGroup}
+          disabled={creating || !groupName.trim() || selected.length === 0}
+        >
+          {creating
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={styles.createBtnText}>Create Group</Text>
+          }
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
-  container:        { flex: 1, backgroundColor: '#0a0a0a', padding: 20, paddingTop: 50 },
+  container:        { flex: 1 },
+  content:          { padding: 20, paddingTop: 50, paddingBottom: 32 },
   backBtn:          { marginBottom: 16 },
   backText:         { color: '#4f6ef7', fontSize: 16 },
   title:            { fontSize: 24, fontWeight: '700', color: '#fff', marginBottom: 20 },
@@ -147,7 +157,7 @@ const styles = StyleSheet.create({
   addRow:           { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 20 },
   addBtn:           { backgroundColor: '#4f6ef7', borderRadius: 10, paddingHorizontal: 18, paddingVertical: 14 },
   addBtnText:       { color: '#fff', fontWeight: '600', fontSize: 15 },
-  memberList:       { flex: 1, marginBottom: 12 },
+  memberList:       { marginBottom: 24 },
   memberListLabel:  { color: '#888', fontSize: 13, marginBottom: 10 },
   youChip:          { backgroundColor: '#1a1a1a', borderRadius: 10, padding: 12, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#4f6ef7' },
   youChipText:      { color: '#4f6ef7', fontSize: 15, fontWeight: '600' },
