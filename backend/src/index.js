@@ -45,6 +45,40 @@ await app.register(inviteRoutes)
 
 app.get('/', (req, reply) => reply.type('text/html').send(landingPage))
 app.get('/health', () => ({ ok: true }))
+
+// QR invite redirect — opens app if installed, Play Store if not
+app.get('/invite/:token', (req, reply) => {
+  const { token } = req.params
+  const appLink   = `blink://invite/${token}`
+  const storeLink = 'https://play.google.com/store/apps/details?id=com.blink'
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Blink Invite</title>
+  <style>
+    body{margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#0a0a0a;font-family:sans-serif;color:#fff;text-align:center;padding:24px;box-sizing:border-box}
+    h1{font-size:28px;margin-bottom:8px}
+    p{color:#888;margin-bottom:32px;line-height:1.5}
+    a{display:inline-block;background:#4f6ef7;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-weight:700;font-size:16px;margin-bottom:12px}
+    .store{background:#1f1f1f;font-size:14px;color:#aaa}
+  </style>
+</head>
+<body>
+  <h1>🔐 Blink Invite</h1>
+  <p>You've been invited to connect on Blink,<br/>an end-to-end encrypted messenger.</p>
+  <a href="${appLink}" id="appLink">Open in Blink</a><br/>
+  <a class="store" href="${storeLink}">Don't have Blink? Download it</a>
+  <script>
+    // Auto-open the app; fall back gracefully if not installed
+    setTimeout(function(){ window.location.href = '${appLink}' }, 300)
+    setTimeout(function(){ document.getElementById('appLink').href = '${storeLink}' }, 2500)
+  </script>
+</body>
+</html>`
+  reply.type('text/html').send(html)
+})
 app.get('/version', () => ({ version: 'v3' }))
 
 const port = Number(process.env.PORT ?? 3000)
