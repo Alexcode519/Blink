@@ -60,7 +60,7 @@ export async function inviteRoutes(app) {
   // Get pending invites addressed to me
   app.get('/invites/pending', async (req) => {
     const { rows } = await pool.query(
-      `SELECT ci.id, u.username AS senderUsername, u.public_key AS senderPublicKey,
+      `SELECT ci.id, u.username AS "senderUsername", u.public_key AS "senderPublicKey",
               ci.created_at, ci.expires_at
        FROM contact_invites ci
        JOIN users u ON u.id = ci.sender_id
@@ -74,7 +74,7 @@ export async function inviteRoutes(app) {
   // Get invites I sent + their status
   app.get('/invites/sent', async (req) => {
     const { rows } = await pool.query(
-      `SELECT ci.id, u.username AS recipientUsername, ci.status, ci.created_at
+      `SELECT ci.id, u.username AS "recipientUsername", ci.status, ci.created_at
        FROM contact_invites ci
        JOIN users u ON u.id = ci.recipient_id
        WHERE ci.sender_id = $1
