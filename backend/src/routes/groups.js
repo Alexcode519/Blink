@@ -536,9 +536,13 @@ export async function groupRoutes(app) {
     const expiresAt = expiresHours ? new Date(Date.now() + expiresHours * 3600 * 1000).toISOString() : null
 
     const { rows } = await pool.query(
-      `UPDATE group_save_requests gsr SET status = $1, expires_at = $4
-       FROM group_messages gm JOIN users u ON u.id = gsr.requester_id
-       WHERE gsr.id = $2 AND gsr.message_id = gm.id AND gm.sender_id = $3
+      `UPDATE group_save_requests gsr
+       SET status = $1, expires_at = $4
+       FROM group_messages gm, users u
+       WHERE gsr.id = $2
+         AND gsr.message_id = gm.id
+         AND gm.sender_id = $3
+         AND u.id = gsr.requester_id
        RETURNING gsr.id, u.fcm_token, u.username AS requester_username`,
       [decision, req.params.requestId, req.user.userId, expiresAt]
     )
