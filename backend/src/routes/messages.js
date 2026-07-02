@@ -79,7 +79,7 @@ export async function messageRoutes(app) {
   app.get('/messages/conversations', async (req) => {
     const { rows } = await pool.query(
       `WITH unread AS (
-         SELECT sender_id AS other_user, COUNT(*) AS cnt
+         SELECT sender_id AS other_user, COUNT(*)::int AS cnt
          FROM messages
          WHERE recipient_id = $1 AND read_at IS NULL
          GROUP BY sender_id
@@ -474,6 +474,11 @@ export async function messageRoutes(app) {
       `DELETE FROM messages
        WHERE (sender_id = $1 AND recipient_id = $2)
           OR (sender_id = $2 AND recipient_id = $1)`,
+      [req.user.userId, otherId]
+    )
+    // Remove from contacts list so they don't reappear via the accepted_contacts UNION
+    await pool.query(
+      `DELETE FROM accepted_contacts WHERE user_id = $1 AND contact_id = $2`,
       [req.user.userId, otherId]
     )
     return { ok: true }

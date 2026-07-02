@@ -12,7 +12,7 @@ import { pickerGuard } from '../utils/pickerGuard'
 import RNFS from 'react-native-fs'
 import Video from 'react-native-video'
 import { api } from '../api/client'
-import { saveToLibrary } from '../library/storage'
+import { saveToLibrary, loadIndex } from '../library/storage'
 import { decryptGroupKey, encryptWithGroupKey, decryptWithGroupKey } from '../crypto/keys'
 import Icon from 'react-native-vector-icons/Feather'
 import notifee from '@notifee/react-native'
@@ -48,6 +48,11 @@ export default function GroupChatScreen({ route, navigation }) {
   const [playbackPos, setPlaybackPos]   = useState(0)
   const [playbackDur, setPlaybackDur]   = useState(0)
   const audioRecorder = useRef(new AudioRecorderPlayer()).current
+
+  const [searchOpen, setSearchOpen]         = useState(false)
+  const [searchQuery, setSearchQuery]       = useState('')
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0)
+  const searchInputRef = useRef(null)
 
   const [groupSaveRequest, setGroupSaveRequest] = useState(null) // sender-side pending request
   const groupSaveRequestRef = useRef(null) // mirrors state — avoids stale closure in interval
@@ -203,13 +208,29 @@ export default function GroupChatScreen({ route, navigation }) {
     }
   }
 
+  async function cacheGroupImageFile(msg) {
+    if (msg.contentType !== 'image' || !msg.uri?.startsWith('data:')) return msg
+    const b64 = msg.uri.replace(/^data:[^;]+;base64,/, '')
+    const path = `${RNFS.CachesDirectoryPath}/grp_img_${msg.id}.jpg`
+    try {
+      const exists = await RNFS.exists(path)
+      if (!exists) await RNFS.writeFile(path, b64, 'base64')
+      return { ...msg, uri: `file://${path}` }
+    } catch {
+      return msg
+    }
+  }
+
   const loadHistory = useCallback(async () => {
     try {
       const { messages: raw } = await api.get(`/groups/${groupId}/messages`)
       const me = await AsyncStorage.getItem('username')
-      const decrypted = raw
-        .map(m => ({ ...decryptRow(m), mine: m.sender_username === me }))
-        .filter(Boolean)
+      const decrypted = await Promise.all(
+        raw
+          .map(m => ({ ...decryptRow(m), mine: m.sender_username === me }))
+          .filter(Boolean)
+          .map(cacheGroupImageFile)
+      )
       setMessages(decrypted)
       if (raw.length) latestAtRef.current = raw[raw.length - 1].created_at
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 150)
@@ -224,9 +245,12 @@ export default function GroupChatScreen({ route, navigation }) {
       const me = await AsyncStorage.getItem('username')
       const { messages: raw } = await api.get(`/groups/${groupId}/messages/since/${encodeURIComponent(since)}`)
       if (!raw.length) return
-      const decrypted = raw
-        .map(m => ({ ...decryptRow(m), mine: m.sender_username === me }))
-        .filter(Boolean)
+      const decrypted = await Promise.all(
+        raw
+          .map(m => ({ ...decryptRow(m), mine: m.sender_username === me }))
+          .filter(Boolean)
+          .map(cacheGroupImageFile)
+      )
       setMessages(prev => {
         const ids = new Set(prev.map(m => m.id))
         const fresh = decrypted.filter(m => !ids.has(m.id))
@@ -250,6 +274,10 @@ export default function GroupChatScreen({ route, navigation }) {
     const me = await AsyncStorage.getItem('username')
     const newMsg = { id: messageId, sender: me, mine: true, contentType, createdAt, replyTo, reactions: [], ...payload }
     setMessages(prev => [...prev, newMsg])
+    // Cache sent media so the sender-side SaveRequestModal can show a preview
+    if (contentType !== 'text' && payload.uri) {
+      AsyncStorage.setItem(`blink_sent_${messageId}`, JSON.stringify({ payload: payload.uri, contentType, label: payload.filename ?? null })).catch(() => {})
+    }
     latestAtRef.current = createdAt
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
   }
@@ -324,8 +352,15 @@ export default function GroupChatScreen({ route, navigation }) {
       return
     }
 
-    // Others' messages: send a save request to the sender
+    // Others' messages: check duplicate then send a save request to the sender
     try {
+      if (item.id) {
+        const existing = await loadIndex(false)
+        if (existing.some(i => i.messageId === item.id)) {
+          Alert.alert('Already saved', 'This file is already in your Blink Library.')
+          return
+        }
+      }
       const { requestId } = await api.post(`/groups/${groupId}/messages/${item.id}/save-request`, {})
       pendingGroupSaves.current[item.id] = { requestId, item }
       Alert.alert('Save requested', 'Waiting for the sender to approve.')
@@ -410,8 +445,8 @@ export default function GroupChatScreen({ route, navigation }) {
     }
     try {
       const result = useCamera
-        ? await launchCamera({ mediaType: 'photo', quality: 0.7, includeBase64: true })
-        : await launchImageLibrary({ mediaType: 'photo', quality: 0.7, includeBase64: true })
+        ? await launchCamera({ mediaType: 'photo', quality: 0.4, maxWidth: 1280, maxHeight: 1280, includeBase64: true })
+        : await launchImageLibrary({ mediaType: 'photo', quality: 0.4, maxWidth: 1280, maxHeight: 1280, includeBase64: true })
       if (result.didCancel || !result.assets?.length) return
       const asset = result.assets[0]
       await sendPayload({ uri: `data:image/jpeg;base64,${asset.base64}` }, 'image')
@@ -508,6 +543,28 @@ export default function GroupChatScreen({ route, navigation }) {
     } catch (e) { Alert.alert('Error', e.message) }
   }
 
+  // ── Search helpers ──────────────────────────────────────────────────────────
+  const searchMatches = searchQuery.trim().length > 0
+    ? messages.reduce((acc, m, idx) => {
+        if (typeof m.text === 'string' && m.text.toLowerCase().includes(searchQuery.toLowerCase())) acc.push(idx)
+        return acc
+      }, [])
+    : []
+
+  function openSearch() {
+    setSearchOpen(true)
+    setSearchQuery('')
+    setSearchMatchIndex(0)
+    setTimeout(() => searchInputRef.current?.focus(), 100)
+  }
+  function closeSearch() { setSearchOpen(false); setSearchQuery(''); setSearchMatchIndex(0) }
+  function goToMatch(direction) {
+    if (!searchMatches.length) return
+    const next = (searchMatchIndex + direction + searchMatches.length) % searchMatches.length
+    setSearchMatchIndex(next)
+    listRef.current?.scrollToIndex({ index: searchMatches[next], animated: true, viewPosition: 0.5 })
+  }
+
   // ── Render bubble ───────────────────────────────────────────────────────────
   function renderBubble({ item }) {
     const isAudio = item.contentType === 'audio'
@@ -549,7 +606,15 @@ export default function GroupChatScreen({ route, navigation }) {
               <Text style={[styles.bubbleText, { fontSize }]}>📄 {item.filename ?? 'Document'}</Text>
             )}
             {!isAudio && !isImage && !isVideo && !isDoc && (
-              <Text style={[styles.bubbleText, { fontSize }]}>{item.text}</Text>
+              <Text style={[styles.bubbleText, { fontSize }]}>
+                {searchQuery.trim() && item.text?.toLowerCase().includes(searchQuery.toLowerCase())
+                  ? item.text.split(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')).map((part, i) =>
+                      part.toLowerCase() === searchQuery.toLowerCase()
+                        ? <Text key={i} style={[styles.searchHighlight, { fontSize }]}>{part}</Text>
+                        : part
+                    )
+                  : item.text}
+              </Text>
             )}
             {!item.mine && (isImage || isVideo || isDoc) && (
               <TouchableOpacity onPress={() => saveToGroupLibrary(item)}>
@@ -616,6 +681,12 @@ export default function GroupChatScreen({ route, navigation }) {
             <Text style={styles.headerSub}>{members.length} members</Text>
           </View>
         </View>
+        <TouchableOpacity style={styles.headerBtn} onPress={openSearch}>
+          <Icon name="search" size={20} color="#888" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.navigate('Library', { fromGroupId: groupId })}>
+          <Icon name="feather" size={20} color="#4f6ef7" />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.headerBtn}
           onPress={() => navigation.navigate('GroupInfo', { groupId, groupName })}
@@ -623,6 +694,33 @@ export default function GroupChatScreen({ route, navigation }) {
           <Icon name="info" size={20} color="#888" />
         </TouchableOpacity>
       </View>
+
+      {searchOpen && (
+        <View style={styles.searchBar}>
+          <TextInput
+            ref={searchInputRef}
+            style={styles.searchInput}
+            placeholder="Search messages…"
+            placeholderTextColor="#555"
+            value={searchQuery}
+            onChangeText={t => { setSearchQuery(t); setSearchMatchIndex(0) }}
+          />
+          {searchQuery.length > 0 && (
+            <Text style={styles.searchCount}>
+              {searchMatches.length === 0 ? '0 results' : `${searchMatchIndex + 1} / ${searchMatches.length}`}
+            </Text>
+          )}
+          <TouchableOpacity onPress={() => goToMatch(-1)} style={styles.searchNav} disabled={!searchMatches.length}>
+            <Icon name="chevron-up" size={18} color={searchMatches.length ? '#fff' : '#444'} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => goToMatch(1)} style={styles.searchNav} disabled={!searchMatches.length}>
+            <Icon name="chevron-down" size={18} color={searchMatches.length ? '#fff' : '#444'} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={closeSearch} style={styles.searchNav}>
+            <Icon name="x" size={18} color="#888" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Messages */}
       <FlatList
@@ -762,6 +860,11 @@ const styles = StyleSheet.create({
   headerTitle:        { color: '#fff', fontSize: 16, fontWeight: '700' },
   headerSub:          { color: '#888', fontSize: 12 },
   headerBtn:          { padding: 8 },
+  searchBar:          { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1f1f1f', gap: 6 },
+  searchInput:        { flex: 1, color: '#fff', fontSize: 15, backgroundColor: '#1a1a1a', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  searchCount:        { color: '#888', fontSize: 13, minWidth: 56, textAlign: 'center' },
+  searchNav:          { padding: 4 },
+  searchHighlight:    { backgroundColor: '#4f6ef750', color: '#fff', borderRadius: 3 },
   mineOuter:          { width: '100%', alignItems: 'flex-end', marginBottom: 6 },
   theirsOuter:        { width: '100%', alignItems: 'flex-start', marginBottom: 6 },
   bubbleWrap:         { flexDirection: 'row', alignItems: 'flex-end', maxWidth: '88%' },

@@ -173,7 +173,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign out', style: 'destructive', onPress: () => {
-          AsyncStorage.multiRemove(['token', 'username']).then(() => {
+          AsyncStorage.multiRemove(['token', 'username', 'blink_cache_conversations', 'blink_cache_groups']).then(() => {
             onLogout()
           })
         },

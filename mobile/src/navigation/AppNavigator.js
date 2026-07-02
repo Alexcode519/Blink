@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react'
-import { AppState } from 'react-native'
-import { NavigationContainer } from '@react-navigation/native'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
+import { AppState, Linking } from 'react-native'
+import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import messaging from '@react-native-firebase/messaging'
+import notifee from '@notifee/react-native'
 import { setupPushNotifications } from '../notifications/setup'
 import { syncPublicKey } from '../crypto/keys'
 import { api, initToken } from '../api/client'
@@ -27,16 +28,32 @@ import SafetyNumberScreen from '../screens/SafetyNumberScreen'
 import BleTestScreen from '../screens/BleTestScreen'
 import OnboardingScreen from '../screens/OnboardingScreen'
 import InviteReviewScreen from '../screens/InviteReviewScreen'
+import QRInviteScreen from '../screens/QRInviteScreen'
+import QRClaimScreen from '../screens/QRClaimScreen'
 
 const Stack = createNativeStackNavigator()
 const screenOpts = { headerShown: false, contentStyle: { backgroundColor: '#0a0a0a' } }
 
+const linking = {
+  prefixes: [
+    'blink://',
+    'https://creative-recreation-production-41a9.up.railway.app',
+  ],
+  config: {
+    screens: {
+      QRClaim: 'invite/:token',
+    },
+  },
+}
+
 export default function AppNavigator() {
   const [authState, setAuthState] = useState(null)
   const [initialRoute, setInitialRoute] = useState(null)
+  const showQRAfterLoginRef = useRef(false)
   const pendingChatRef = useRef(null)
   const appStateRef = useRef(AppState.currentState)
   const wasBackgroundRef = useRef(false)
+  const navRef = useNavigationContainerRef()
 
   // Load onboarding state at top level so hooks are never conditional
   useEffect(() => {
@@ -47,14 +64,20 @@ export default function AppNavigator() {
     async function check() {
       await initToken()   // warm the token cache before any API call
       try {
+        // Check both Firebase (data-only foreground path) and Notifee (background.js cold-start path)
         const initial = await messaging().getInitialNotification()
-        const d = initial?.data
+        const notifeeInitial = await notifee.getInitialNotification()
+        const d = initial?.data ?? notifeeInitial?.notification?.data
         if (d?.type === 'new_group_message' && d?.groupId) {
           pendingChatRef.current = { group: true, groupId: d.groupId }
         } else if (d?.type === 'group_save_request' && d?.groupId) {
           pendingChatRef.current = { group: true, groupId: d.groupId }
         } else if (d?.type === 'save_request' && d?.requesterUsername) {
           pendingChatRef.current = { group: false, senderUsername: d.requesterUsername }
+        } else if (d?.type === 'contact_invite') {
+          // Leave pendingChatRef null — ChatsScreen shows the invite banner on focus
+        } else if (d?.type === 'qr_claimed' && d?.claimerUsername) {
+          pendingChatRef.current = { group: false, senderUsername: d.claimerUsername }
         } else if (d?.senderUsername) {
           pendingChatRef.current = { group: false, senderUsername: d.senderUsername }
         }
@@ -89,11 +112,23 @@ export default function AppNavigator() {
         pendingChatRef.current = { group: true, groupId: d.groupId }
       } else if (d?.type === 'save_request' && d?.requesterUsername) {
         pendingChatRef.current = { group: false, senderUsername: d.requesterUsername }
+      } else if (d?.type === 'contact_invite') {
+        // Leave pendingChatRef null — ChatsScreen shows the invite banner on focus
+      } else if (d?.type === 'qr_claimed' && d?.claimerUsername) {
+        pendingChatRef.current = { group: false, senderUsername: d.claimerUsername }
       } else if (d?.senderUsername) {
         pendingChatRef.current = { group: false, senderUsername: d.senderUsername }
       }
     })
     return () => unsub()
+  }, [])
+
+  // Suppress lock when app is opened via a deep link (QR invite, etc.)
+  useEffect(() => {
+    const sub = Linking.addEventListener('url', () => {
+      wasBackgroundRef.current = false
+    })
+    return () => sub.remove()
   }, [])
 
   useEffect(() => {
@@ -136,24 +171,12 @@ export default function AppNavigator() {
     setAuthState(enabled === 'true' && pattern ? 'pattern' : 'locked')
   }
 
-  // Consume pending chat so the next unlock doesn't re-open it
-  const pendingChat = pendingChatRef.current
-  pendingChatRef.current = null
-
-  // Build initial state so the chat opens immediately after auth, with Chats behind it
-  const loggedInInitialState = pendingChat ? {
-    index: 1,
-    routes: pendingChat.group
-      ? [{ name: 'Chats' }, { name: 'GroupChat', params: { groupId: pendingChat.groupId } }]
-      : [{ name: 'Chats' }, { name: 'Chat', params: { recipientUsername: pendingChat.senderUsername } }],
-  } : undefined
-
   if (authState === 'pattern' || authState === 'locked') {
     return (
       <NavigationContainer key="locked">
         <Stack.Navigator screenOptions={screenOpts}>
           <Stack.Screen name="Login">
-            {props => <LoginScreen {...props} onLogin={handleLogin} isLocked />}
+            {props => <LoginScreen {...props} onLogin={handleLogin} isLocked onShowQR={() => { showQRAfterLoginRef.current = true }} />}
           </Stack.Screen>
         </Stack.Navigator>
       </NavigationContainer>
@@ -161,8 +184,25 @@ export default function AppNavigator() {
   }
 
   if (authState === 'loggedIn') {
+    const onNavReady = () => {
+      const nav = navRef.current
+      if (!nav) return
+      if (showQRAfterLoginRef.current) {
+        showQRAfterLoginRef.current = false
+        nav.navigate('QRInvite')
+      } else if (pendingChatRef.current) {
+        const p = pendingChatRef.current
+        pendingChatRef.current = null
+        if (p.group) {
+          nav.navigate('GroupChat', { groupId: p.groupId })
+        } else {
+          nav.navigate('Chat', { recipientUsername: p.senderUsername })
+        }
+      }
+    }
+
     return (
-      <NavigationContainer key="loggedIn" initialState={loggedInInitialState}>
+      <NavigationContainer key="loggedIn" ref={navRef} onReady={onNavReady} linking={linking}>
         <Stack.Navigator screenOptions={screenOpts}>
           <Stack.Screen name="Chats" component={ChatsScreen} />
           <Stack.Screen name="FindUser" component={FindUserScreen} />
@@ -179,6 +219,8 @@ export default function AppNavigator() {
           <Stack.Screen name="GroupInfo" component={GroupInfoScreen} />
           <Stack.Screen name="SafetyNumber" component={SafetyNumberScreen} />
           <Stack.Screen name="InviteReview" component={InviteReviewScreen} />
+          <Stack.Screen name="QRInvite" component={QRInviteScreen} />
+          <Stack.Screen name="QRClaim" component={QRClaimScreen} />
           <Stack.Screen name="BleTest" component={BleTestScreen} />
         </Stack.Navigator>
       </NavigationContainer>
@@ -193,7 +235,7 @@ export default function AppNavigator() {
       <Stack.Navigator screenOptions={screenOpts} initialRouteName={initialRoute}>
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Login">
-          {props => <LoginScreen {...props} onLogin={handleLogin} />}
+          {props => <LoginScreen {...props} onLogin={handleLogin} onShowQR={() => { showQRAfterLoginRef.current = true }} />}
         </Stack.Screen>
         <Stack.Screen name="Register">
           {props => <RegisterScreen {...props} onLogin={handleLogin} />}

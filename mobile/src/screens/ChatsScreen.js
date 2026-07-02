@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Alert, Pressable } from 'react-native'
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Alert, Pressable, BackHandler } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useFocusEffect } from '@react-navigation/native'
+import messaging from '@react-native-firebase/messaging'
 import Svg, { Path, Line, Circle, Polyline, Rect, G } from 'react-native-svg'
 import RNFS from 'react-native-fs'
 import { api } from '../api/client'
@@ -85,6 +86,8 @@ export default function ChatsScreen({ navigation }) {
 
   useFocusEffect(useCallback(() => {
     isFocused.current = true
+    // Swallow back press on the home screen — use the home button to leave the app
+    const backSub = BackHandler.addEventListener('hardwareBackPress', () => true)
 
     // Show cached data immediately so the screen is never blank
     Promise.all([
@@ -104,7 +107,7 @@ export default function ChatsScreen({ navigation }) {
       if (exists) setAvatarUri(`file://${AVATAR_PATH}?t=${Date.now()}`)
       else setAvatarUri(null)
     })
-    return () => { isFocused.current = false }
+    return () => { isFocused.current = false; backSub.remove() }
   }, []))
 
   useEffect(() => {
@@ -116,7 +119,11 @@ export default function ChatsScreen({ navigation }) {
         .then(({ requests }) => { if (requests.length && !extendRequest) setExtendRequest(requests[0]) })
         .catch(() => {})
     }, 3000)
-    return () => clearInterval(timer)
+    // Immediately refresh when a foreground message arrives so badge appears instantly
+    const unsubFCM = messaging().onMessage(() => {
+      if (isFocused.current) loadConversations()
+    })
+    return () => { clearInterval(timer); unsubFCM() }
   }, [extendRequest])
 
   async function handleExtendDecide(decision, hours) {
@@ -152,6 +159,11 @@ export default function ChatsScreen({ navigation }) {
         text: 'Leave', style: 'destructive', onPress: async () => {
           try {
             await api.delete(`/groups/${group.id}/members/me`)
+            const cachedG = await AsyncStorage.getItem(CACHE_KEY_GROUPS)
+            if (cachedG) {
+              const updated = JSON.parse(cachedG).filter(g => g.id !== group.id)
+              await AsyncStorage.setItem(CACHE_KEY_GROUPS, JSON.stringify(updated))
+            }
             setGroups(prev => prev.filter(g => g.id !== group.id))
           } catch (err) {
             Alert.alert('Error', err.message)
@@ -168,6 +180,14 @@ export default function ChatsScreen({ navigation }) {
         text: 'Delete', style: 'destructive', onPress: async () => {
           try {
             await api.delete(`/messages/conversation/${username}`)
+            // Clear local message cache so history doesn't reappear
+            await AsyncStorage.removeItem(`blink_chat_${username}`)
+            // Update conversations cache so the person doesn't flash back on next open
+            const cached = await AsyncStorage.getItem(CACHE_KEY_CONVS)
+            if (cached) {
+              const updated = JSON.parse(cached).filter(c => c.other_username !== username)
+              await AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(updated))
+            }
             setConversations(prev => prev.filter(c => c.other_username !== username))
           } catch (err) {
             Alert.alert('Error', err.message)
@@ -189,9 +209,9 @@ export default function ChatsScreen({ navigation }) {
             : <View style={styles.groupAvatar}><Text style={styles.avatarText}>{item.name[0].toUpperCase()}</Text></View>
           }
           <Text style={styles.username}>{item.name}</Text>
-          {item.unread_count > 0 && (
+          {Number(item.unread_count) > 0 && (
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{item.unread_count > 99 ? '99+' : item.unread_count}</Text>
+              <Text style={styles.badgeText}>{Number(item.unread_count) > 99 ? '99+' : item.unread_count}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -226,9 +246,9 @@ export default function ChatsScreen({ navigation }) {
               <Text style={styles.requestBadgeText}>Request</Text>
             </View>
           )}
-          {item.unread_count > 0 && (
+          {Number(item.unread_count) > 0 && (
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{item.unread_count > 99 ? '99+' : item.unread_count}</Text>
+              <Text style={styles.badgeText}>{Number(item.unread_count) > 99 ? '99+' : item.unread_count}</Text>
             </View>
           )}
         </TouchableOpacity>

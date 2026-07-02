@@ -8,7 +8,7 @@ import { generateAndStoreKeyPair } from '../crypto/keys'
 import PatternLock from '../components/PatternLock'
 import { panicWipe } from '../utils/panicWipe'
 
-export default function LoginScreen({ navigation, onLogin, isLocked }) {
+export default function LoginScreen({ navigation, onLogin, isLocked, onShowQR }) {
   const [username, setUsername]         = useState('')
   const [password, setPassword]         = useState('')
   const [loading, setLoading]           = useState(false)
@@ -17,6 +17,14 @@ export default function LoginScreen({ navigation, onLogin, isLocked }) {
   const [patternAttempts, setPatternAttempts]   = useState(0)
   // mode: 'methods' | 'password' | 'pattern'  (only used when isLocked)
   const [mode, setMode] = useState('methods')
+  const [qrPending, setQrPending] = useState(false)
+
+  function handleLogoPress() {
+    if (!onShowQR) return
+    onShowQR()
+    setQrPending(true)
+    if (isLocked) setMode('password')  // show unlock input immediately
+  }
 
   useEffect(() => {
     AsyncStorage.getItem('username').then(u => { if (u) setUsername(u) })
@@ -92,13 +100,15 @@ export default function LoginScreen({ navigation, onLogin, isLocked }) {
   if (!isLocked) {
     return (
       <View style={styles.container}>
-        <View style={styles.logoWrap}>
+        <TouchableOpacity style={styles.logoWrap} onPress={handleLogoPress} activeOpacity={onShowQR ? 0.7 : 1}>
+          {onShowQR && !qrPending && <Text style={styles.qrHint}>Blink now</Text>}
+          {onShowQR && !qrPending && <View style={styles.qrLine} />}
           <View style={styles.logoCircle}>
             <Icon name="feather" size={36} color="#4f6ef7" />
           </View>
           <Text style={styles.title}>Blink</Text>
-        </View>
-        <Text style={styles.subtitle}>Welcome back</Text>
+        </TouchableOpacity>
+        <Text style={styles.subtitle}>{qrPending ? 'Log in to get your QR invite code' : 'Welcome back'}</Text>
         <TextInput style={styles.input} placeholder="Username" placeholderTextColor="#555"
           autoCapitalize="none" value={username} onChangeText={setUsername} />
         <TextInput style={styles.input} placeholder="Password" placeholderTextColor="#555"
@@ -138,13 +148,15 @@ export default function LoginScreen({ navigation, onLogin, isLocked }) {
   if (mode === 'password') {
     return (
       <View style={styles.container}>
-        <View style={styles.logoWrap}>
+        <TouchableOpacity style={styles.logoWrap} onPress={handleLogoPress} activeOpacity={onShowQR ? 0.7 : 1}>
+          {onShowQR && !qrPending && <Text style={styles.qrHint}>Blink now</Text>}
+          {onShowQR && !qrPending && <View style={styles.qrLine} />}
           <View style={styles.logoCircle}>
             <Icon name="feather" size={36} color="#4f6ef7" />
           </View>
           <Text style={styles.title}>Blink</Text>
-        </View>
-        <Text style={styles.subtitle}>Enter your password to continue</Text>
+        </TouchableOpacity>
+        <Text style={styles.subtitle}>{qrPending ? 'Unlock to get your QR invite code' : 'Enter your password to continue'}</Text>
         <TextInput style={styles.input} placeholder="Username" placeholderTextColor="#555"
           autoCapitalize="none" value={username} onChangeText={setUsername} />
         <TextInput style={styles.input} placeholder="Password" placeholderTextColor="#555"
@@ -171,13 +183,15 @@ export default function LoginScreen({ navigation, onLogin, isLocked }) {
   // ── Locked: methods chooser (default) ─────────────────────────────
   return (
     <View style={styles.container}>
-      <View style={styles.logoWrap}>
+      <TouchableOpacity style={styles.logoWrap} onPress={handleLogoPress} activeOpacity={0.7}>
+        {!qrPending && <Text style={styles.qrHint}>Blink now</Text>}
+        {!qrPending && <View style={styles.qrLine} />}
         <View style={styles.logoCircle}>
           <Icon name="feather" size={36} color="#4f6ef7" />
         </View>
         <Text style={styles.title}>Blink</Text>
-      </View>
-      <Text style={styles.subtitle}>Choose how to unlock</Text>
+      </TouchableOpacity>
+      <Text style={styles.subtitle}>{qrPending ? 'Unlock to get your QR invite code' : 'Choose how to unlock'}</Text>
 
       {biometricEnabled && (
         <TouchableOpacity style={styles.methodBtn} onPress={triggerBiometric}>
@@ -200,7 +214,7 @@ export default function LoginScreen({ navigation, onLogin, isLocked }) {
 }
 
 const styles = StyleSheet.create({
-  container:   { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#0a0a0a' },
+  container:   { flex: 1, justifyContent: 'flex-start', padding: 24, paddingTop: 80, backgroundColor: '#0a0a0a' },
   logoWrap:    { alignItems: 'center', marginBottom: 8 },
   logoCircle:  {
     width: 80, height: 80, borderRadius: 40,
@@ -220,4 +234,6 @@ const styles = StyleSheet.create({
   altRow:      { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 28 },
   altBtn:      { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8, borderWidth: 1, borderColor: '#333' },
   altText:     { color: '#888', fontSize: 14 },
+  qrHint:      { color: '#4f6ef7', fontSize: 12, fontWeight: '600', textAlign: 'center', marginBottom: 6 },
+  qrLine:      { width: 1, height: 20, backgroundColor: '#4f6ef7', alignSelf: 'center', marginBottom: 6 },
 })

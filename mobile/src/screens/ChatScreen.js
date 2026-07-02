@@ -12,7 +12,7 @@ import { pick, isCancel, types } from '@react-native-documents/picker'
 import { pickerGuard } from '../utils/pickerGuard'
 import RNFS from 'react-native-fs'
 import Video from 'react-native-video'
-import { saveToLibrary } from '../library/storage'
+import { saveToLibrary, loadIndex } from '../library/storage'
 import { api } from '../api/client'
 import { encryptForRecipient, decryptFromSender } from '../crypto/keys'
 import SaveRequestModal from '../components/SaveRequestModal'
@@ -41,6 +41,7 @@ export default function ChatScreen({ route, navigation }) {
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [viewOnce, setViewOnce] = useState(false)
   const [viewOnceOpened, setViewOnceOpened] = useState({}) // messageId -> true
+  const [viewingOnceItem, setViewingOnceItem] = useState(null) // item currently shown full-screen
   const [burnPicker, setBurnPicker] = useState(null) // messageId being configured
   const [linkPreview, setLinkPreview] = useState(null)
   const [linkPreviewDismissed, setLinkPreviewDismissed] = useState(false)
@@ -250,7 +251,7 @@ export default function ChatScreen({ route, navigation }) {
     const timer = setInterval(async () => {
       try {
         const { requests } = await api.get('/messages/save-requests/pending')
-        const next = requests?.find(r => !dismissedSaveIds.current.has(r.id))
+        const next = requests?.find(r => !dismissedSaveIds.current.has(r.id) && r.requesterUsername === recipientUsername)
         if (next && !saveRequestRef.current) {
           saveRequestRef.current = next
           setSaveRequest(next)
@@ -635,6 +636,13 @@ export default function ChatScreen({ route, navigation }) {
   async function requestSave(message) {
     if (message.contentType === 'text') return
     try {
+      if (message.id) {
+        const existing = await loadIndex(false)
+        if (existing.some(i => i.messageId === message.id)) {
+          Alert.alert('Already saved', 'This file is already in your Blink Library.')
+          return
+        }
+      }
       const { requestId } = await api.post(`/messages/${message.id}/save-request`, {})
       pendingSaves.current[message.id] = { requestId, payload: message.payload, contentType: message.contentType, label: message.label }
       Alert.alert('Save requested', 'Waiting for the sender to approve.')
@@ -772,11 +780,17 @@ export default function ChatScreen({ route, navigation }) {
     }
   }
 
-  async function openViewOnce(item) {
-    // Show full-screen then immediately mark as viewed server-side
+  function openViewOnce(item) {
+    // Show full-screen modal first — mark as viewed only when dismissed
+    setViewingOnceItem(item)
+  }
+
+  async function closeViewOnce() {
+    const item = viewingOnceItem
+    setViewingOnceItem(null)
+    if (!item) return
     setViewOnceOpened(prev => ({ ...prev, [item.id]: true }))
     try { await api.post(`/messages/${item.id}/viewed`, {}) } catch {}
-    // Remove from local cache so it won't re-appear
     setMessages(prev => {
       const next = prev.map(m => m.id === item.id ? { ...m, viewed_at: new Date().toISOString() } : m)
       saveCache(next)
@@ -1313,6 +1327,30 @@ export default function ChatScreen({ route, navigation }) {
         </Pressable>
       </Modal>
 
+      {/* View-once full-screen viewer */}
+      <Modal visible={!!viewingOnceItem} transparent animationType="fade" onRequestClose={closeViewOnce}>
+        <View style={styles.viewOnceModal}>
+          {viewingOnceItem?.contentType === 'image' && (
+            <Image
+              source={{ uri: viewingOnceItem.payload.startsWith('file://') ? viewingOnceItem.payload : `data:image/jpeg;base64,${viewingOnceItem.payload}` }}
+              style={styles.viewOnceFullImg}
+              resizeMode="contain"
+            />
+          )}
+          {viewingOnceItem?.contentType === 'video' && (
+            <Video
+              source={{ uri: viewingOnceItem.payload.startsWith('file://') ? viewingOnceItem.payload : `file://${viewingOnceItem.payload}` }}
+              style={styles.viewOnceFullImg}
+              controls
+              resizeMode="contain"
+            />
+          )}
+          <TouchableOpacity style={styles.viewOnceClose} onPress={closeViewOnce}>
+            <Text style={styles.viewOnceCloseText}>✕  Close (view once)</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
       {saveRequest && (
         <SaveRequestModal
           request={saveRequest}
@@ -1425,6 +1463,10 @@ const styles = StyleSheet.create({
   viewOnceIcon:  { fontSize: 22 },
   viewOnceLabel: { color: '#fff', fontSize: 14, fontWeight: '500' },
   viewOnceOpened:{ color: '#555', fontSize: 13, fontStyle: 'italic', padding: 8 },
+  viewOnceModal: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+  viewOnceFullImg: { width: '100%', height: '85%' },
+  viewOnceClose: { marginTop: 20, paddingVertical: 12, paddingHorizontal: 28, backgroundColor: '#1f1f1f', borderRadius: 24 },
+  viewOnceCloseText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   menuCancel:    { paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   menuCancelText:{ color: '#4f6ef7', fontSize: 16 },
   replyQuote:       { borderLeftWidth: 3, borderLeftColor: 'rgba(255,255,255,0.5)', paddingLeft: 8, marginBottom: 6 },

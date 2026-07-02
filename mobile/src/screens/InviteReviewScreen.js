@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView } from 'react-native'
 import { api } from '../api/client'
 import { syncPublicKey, computeSafetyNumber } from '../crypto/keys'
 
@@ -53,7 +53,7 @@ export default function InviteReviewScreen({ route, navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
@@ -93,12 +93,13 @@ export default function InviteReviewScreen({ route, navigation }) {
           {acting ? <ActivityIndicator color="#fff" /> : <Text style={styles.acceptTxt}>✓ Accept & Verify</Text>}
         </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
-  container:   { flex: 1, backgroundColor: '#0a0a0a', padding: 20, paddingTop: 50 },
+  container:   { flex: 1, backgroundColor: '#0a0a0a' },
+  content:     { padding: 20, paddingTop: 50, paddingBottom: 40 },
   backBtn:     { marginBottom: 16 },
   backText:    { color: '#4f6ef7', fontSize: 16 },
   header:      { alignItems: 'center', marginBottom: 24 },
@@ -113,7 +114,7 @@ const styles = StyleSheet.create({
   numberGrid:  { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 16 },
   numberGroup: { color: '#fff', fontSize: 15, fontFamily: 'monospace', backgroundColor: '#1a1a1a', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: '#2a2a2a' },
   hint:        { color: '#555', fontSize: 12, lineHeight: 18, textAlign: 'center', marginBottom: 32 },
-  btnRow:      { flexDirection: 'row', gap: 12, marginTop: 'auto' },
+  btnRow:      { flexDirection: 'row', gap: 12, marginTop: 32 },
   declineBtn:  { flex: 1, borderWidth: 1, borderColor: '#ff4444', borderRadius: 12, padding: 16, alignItems: 'center' },
   declineTxt:  { color: '#ff4444', fontWeight: '600', fontSize: 15 },
   acceptBtn:   { flex: 2, backgroundColor: '#4f6ef7', borderRadius: 12, padding: 16, alignItems: 'center' },
