@@ -86,6 +86,10 @@ export async function messageRoutes(app) {
        ),
        contacts AS (
          SELECT contact_id FROM accepted_contacts WHERE user_id = $1
+       ),
+       messaged AS (
+         SELECT DISTINCT CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS other_user
+         FROM messages WHERE sender_id = $1 OR recipient_id = $1
        )
        SELECT * FROM (
          SELECT DISTINCT ON (other_user)
@@ -108,6 +112,15 @@ export async function messageRoutes(app) {
          LEFT JOIN contacts c ON c.contact_id = t.other_user
          ORDER BY other_user, last_at DESC
        ) convs
+       UNION
+       SELECT
+         u2.id AS other_user, u2.username AS other_username,
+         u2.public_key AS other_public_key, u2.avatar AS other_avatar,
+         ac.created_at AS last_at, 0 AS unread_count, false AS requested
+       FROM accepted_contacts ac
+       JOIN users u2 ON u2.id = ac.contact_id
+       WHERE ac.user_id = $1
+         AND ac.contact_id NOT IN (SELECT other_user FROM messaged)
        ORDER BY last_at DESC`,
       [req.user.userId]
     )
