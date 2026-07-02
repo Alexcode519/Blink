@@ -278,7 +278,7 @@ export async function messageRoutes(app) {
       msgs[0].fcm_token,
       'Save request',
       `${msgs[0].recipientUsername} wants to save something you sent`,
-      { type: 'save_request' }
+      { type: 'save_request', requesterUsername: msgs[0].recipientUsername }
     )
 
     return { requestId: rows[0]?.id }

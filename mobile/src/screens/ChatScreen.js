@@ -37,6 +37,7 @@ export default function ChatScreen({ route, navigation }) {
   const [myAvatar, setMyAvatar] = useState(null)
   const [recipientAvatar, setRecipientAvatar] = useState(null)
   const [saveRequest, setSaveRequest] = useState(null)
+  const dismissedSaveIds = useRef(new Set()) // IDs acted on — never re-show
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [viewOnce, setViewOnce] = useState(false)
   const [viewOnceOpened, setViewOnceOpened] = useState({}) // messageId -> true
@@ -244,15 +245,20 @@ export default function ChatScreen({ route, navigation }) {
     }
   }, [])
 
+  const saveRequestRef = useRef(null)
   useEffect(() => {
     const timer = setInterval(async () => {
       try {
         const { requests } = await api.get('/messages/save-requests/pending')
-        if (requests?.length && !saveRequest) setSaveRequest(requests[0])
+        const next = requests?.find(r => !dismissedSaveIds.current.has(r.id))
+        if (next && !saveRequestRef.current) {
+          saveRequestRef.current = next
+          setSaveRequest(next)
+        }
       } catch {}
     }, POLL_INTERVAL)
     return () => clearInterval(timer)
-  }, [saveRequest])
+  }, [])
 
   const saveMediaFile = useCallback(async (id, base64, ext) => {
     const path = `${RNFS.CachesDirectoryPath}/blink_media_${id}.${ext}`
@@ -639,7 +645,11 @@ export default function ChatScreen({ route, navigation }) {
 
   async function saveToDevice(payload, contentType, label, expiresAt, messageId) {
     try {
-      await saveToLibrary({ payload, contentType, label, fromUsername: recipientUsername, expiresAt: expiresAt ?? null, messageId: messageId ?? null })
+      const result = await saveToLibrary({ payload, contentType, label, fromUsername: recipientUsername, expiresAt: expiresAt ?? null, messageId: messageId ?? null })
+      if (result?.alreadySaved) {
+        Alert.alert('Already saved', 'This file is already in your Blink Library.')
+        return
+      }
       const msg = expiresAt
         ? `Added to your Blink Library. Expires ${new Date(expiresAt).toLocaleString()}.`
         : 'Added to your Blink Library.'
@@ -1307,10 +1317,17 @@ export default function ChatScreen({ route, navigation }) {
         <SaveRequestModal
           request={saveRequest}
           onDecide={async (decision, expiresHours) => {
-            try { await api.patch(`/messages/save-requests/${saveRequest.id}`, { decision, expiresHours }) } catch {}
+            const id = saveRequest.id
+            dismissedSaveIds.current.add(id)
+            saveRequestRef.current = null
+            setSaveRequest(null)
+            try { await api.patch(`/messages/save-requests/${id}`, { decision, expiresHours }) } catch {}
+          }}
+          onCancel={() => {
+            dismissedSaveIds.current.add(saveRequest.id)
+            saveRequestRef.current = null
             setSaveRequest(null)
           }}
-          onCancel={() => setSaveRequest(null)}
         />
       )}
     </View>

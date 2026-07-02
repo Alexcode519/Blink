@@ -50,7 +50,9 @@ export default function GroupChatScreen({ route, navigation }) {
   const audioRecorder = useRef(new AudioRecorderPlayer()).current
 
   const [groupSaveRequest, setGroupSaveRequest] = useState(null) // sender-side pending request
-  const pendingGroupSaves = useRef({})  // requester-side: { [messageId]: { requestId, item } }
+  const groupSaveRequestRef = useRef(null) // mirrors state — avoids stale closure in interval
+  const dismissedGroupSaveIds = useRef(new Set()) // IDs acted on — never re-show
+  const pendingGroupSaves = useRef({})  // requester-side: { [msgId]: { requestId, item } }
 
   const groupKeyRef   = useRef(null)   // Uint8Array once decrypted
   const latestAtRef   = useRef(null)   // ISO string of last received message
@@ -334,7 +336,11 @@ export default function GroupChatScreen({ route, navigation }) {
   async function pollGroupSaveRequests() {
     try {
       const { requests } = await api.get('/groups/save-requests/pending')
-      if (requests?.length && !groupSaveRequest) setGroupSaveRequest(requests[0])
+      const next = requests?.find(r => !dismissedGroupSaveIds.current.has(r.id))
+      if (next && !groupSaveRequestRef.current) {
+        groupSaveRequestRef.current = next
+        setGroupSaveRequest(next)
+      }
     } catch {}
 
     // Requester-side: check status of any pending saves we sent
@@ -347,7 +353,7 @@ export default function GroupChatScreen({ route, navigation }) {
           if (!b64) continue
           const result = await saveToLibrary({
             payload: b64, contentType: item.contentType, label: item.filename,
-            fromGroupId: groupId, groupName, messageId: item.messageId ?? null,
+            fromGroupId: groupId, groupName, messageId: item.id ?? null,
             expiresAt: expires_at ?? null,
           })
           if (!result?.alreadySaved) {
@@ -365,11 +371,14 @@ export default function GroupChatScreen({ route, navigation }) {
   }
 
   async function handleGroupSaveDecide(decision, expiresHours) {
-    if (!groupSaveRequest) return
-    try {
-      await api.patch(`/groups/save-requests/${groupSaveRequest.id}`, { decision, expiresHours: expiresHours ?? undefined })
-    } catch {}
+    if (!groupSaveRequestRef.current) return
+    const req = groupSaveRequestRef.current
+    dismissedGroupSaveIds.current.add(req.id)
+    groupSaveRequestRef.current = null
     setGroupSaveRequest(null)
+    try {
+      await api.patch(`/groups/save-requests/${req.id}`, { decision, expiresHours: expiresHours ?? undefined })
+    } catch {}
   }
 
   function seenByCount(item) {
@@ -573,7 +582,11 @@ export default function GroupChatScreen({ route, navigation }) {
         <SaveRequestModal
           request={groupSaveRequest}
           onDecide={handleGroupSaveDecide}
-          onCancel={() => setGroupSaveRequest(null)}
+          onCancel={() => {
+            if (groupSaveRequestRef.current) dismissedGroupSaveIds.current.add(groupSaveRequestRef.current.id)
+            groupSaveRequestRef.current = null
+            setGroupSaveRequest(null)
+          }}
         />
       )}
       {/* Header */}

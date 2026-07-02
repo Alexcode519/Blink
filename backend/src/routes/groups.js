@@ -509,7 +509,7 @@ export async function groupRoutes(app) {
       msgs[0].fcm_token,
       'Save request',
       `${msgs[0].requester_username} wants to save something you sent in a group`,
-      { type: 'group_save_request' }
+      { type: 'group_save_request', groupId: req.params.groupId, requesterUsername: msgs[0].requester_username }
     ).catch(() => {})
 
     return { requestId: rows[0].id }

@@ -48,10 +48,15 @@ export default function AppNavigator() {
       await initToken()   // warm the token cache before any API call
       try {
         const initial = await messaging().getInitialNotification()
-        if (initial?.data?.type === 'new_group_message' && initial?.data?.groupId) {
-          pendingChatRef.current = { group: true, groupId: initial.data.groupId }
-        } else if (initial?.data?.senderUsername) {
-          pendingChatRef.current = { group: false, senderUsername: initial.data.senderUsername }
+        const d = initial?.data
+        if (d?.type === 'new_group_message' && d?.groupId) {
+          pendingChatRef.current = { group: true, groupId: d.groupId }
+        } else if (d?.type === 'group_save_request' && d?.groupId) {
+          pendingChatRef.current = { group: true, groupId: d.groupId }
+        } else if (d?.type === 'save_request' && d?.requesterUsername) {
+          pendingChatRef.current = { group: false, senderUsername: d.requesterUsername }
+        } else if (d?.senderUsername) {
+          pendingChatRef.current = { group: false, senderUsername: d.senderUsername }
         }
       } catch {}
 
@@ -77,10 +82,15 @@ export default function AppNavigator() {
   useEffect(() => {
     // Notification tapped while app is in background (locked or running)
     const unsub = messaging().onNotificationOpenedApp((remoteMessage) => {
-      if (remoteMessage?.data?.type === 'new_group_message' && remoteMessage?.data?.groupId) {
-        pendingChatRef.current = { group: true, groupId: remoteMessage.data.groupId }
-      } else if (remoteMessage?.data?.senderUsername) {
-        pendingChatRef.current = { group: false, senderUsername: remoteMessage.data.senderUsername }
+      const d = remoteMessage?.data
+      if (d?.type === 'new_group_message' && d?.groupId) {
+        pendingChatRef.current = { group: true, groupId: d.groupId }
+      } else if (d?.type === 'group_save_request' && d?.groupId) {
+        pendingChatRef.current = { group: true, groupId: d.groupId }
+      } else if (d?.type === 'save_request' && d?.requesterUsername) {
+        pendingChatRef.current = { group: false, senderUsername: d.requesterUsername }
+      } else if (d?.senderUsername) {
+        pendingChatRef.current = { group: false, senderUsername: d.senderUsername }
       }
     })
     return () => unsub()
