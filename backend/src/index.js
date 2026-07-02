@@ -49,8 +49,10 @@ app.get('/health', () => ({ ok: true }))
 // QR invite redirect — opens app if installed, Play Store if not
 app.get('/invite/:token', (req, reply) => {
   const { token } = req.params
-  const appLink   = `blink://invite/${token}`
-  const storeLink = 'https://play.google.com/store/apps/details?id=com.blink'
+  const storeLink   = 'https://play.google.com/store/apps/details?id=com.blink'
+  const encodedStore = encodeURIComponent(storeLink)
+  // intent:// URL is the only scheme Chrome on Android will follow from JS redirect
+  const intentLink  = `intent://invite/${token}#Intent;scheme=blink;package=com.blink;S.browser_fallback_url=${encodedStore};end`
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -68,12 +70,10 @@ app.get('/invite/:token', (req, reply) => {
 <body>
   <h1>🔐 Blink Invite</h1>
   <p>You've been invited to connect on Blink,<br/>an end-to-end encrypted messenger.</p>
-  <a href="${appLink}" id="appLink">Open in Blink</a><br/>
+  <a href="${intentLink}" id="appLink">Open in Blink</a><br/>
   <a class="store" href="${storeLink}">Don't have Blink? Download it</a>
   <script>
-    // Auto-open the app; fall back gracefully if not installed
-    setTimeout(function(){ window.location.href = '${appLink}' }, 300)
-    setTimeout(function(){ document.getElementById('appLink').href = '${storeLink}' }, 2500)
+    window.location.href = '${intentLink}'
   </script>
 </body>
 </html>`
