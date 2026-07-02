@@ -370,12 +370,18 @@ export default function GroupChatScreen({ route, navigation }) {
     return `${m}:${sec.toString().padStart(2, '0')}`
   }
 
+  async function requestMicPermission() {
+    if (!PermissionsAndroid) return true
+    const already = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO)
+    if (already) return true
+    const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO)
+    return result === PermissionsAndroid.RESULTS.GRANTED
+  }
+
   async function startRecording() {
     try {
-      if (PermissionsAndroid) {
-        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO)
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) { Alert.alert('Permission denied'); return }
-      }
+      const ok = await requestMicPermission()
+      if (!ok) { Alert.alert('Permission denied', 'Microphone permission is required to record voice notes.'); return }
       const path = `${RNFS.CachesDirectoryPath}/grp_voice_${Date.now()}.mp4`
       await audioRecorder.startRecorder(path)
       audioRecorder.addRecordBackListener(e => {
@@ -631,7 +637,12 @@ export default function GroupChatScreen({ route, navigation }) {
               <Icon name="send" size={20} color="#fff" />
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.micBtn} onLongPress={startRecording} onPressOut={stopRecordingAndSend}>
+            <TouchableOpacity
+              style={styles.micBtn}
+              onPress={requestMicPermission}
+              onLongPress={startRecording}
+              onPressOut={stopRecordingAndSend}
+            >
               <Icon name="mic" size={22} color="#888" />
             </TouchableOpacity>
           )}
