@@ -235,7 +235,7 @@ export default function ChatScreen({ route, navigation }) {
         const { status, expiresAt } = await api.get(`/messages/save-requests/${info.requestId}/status`)
         if (status === 'approved') {
           delete pendingSaves.current[messageId]
-          await saveToDevice(info.payload, info.contentType, info.label, expiresAt)
+          await saveToDevice(info.payload, info.contentType, info.label, expiresAt, messageId)
         } else if (status === 'denied') {
           delete pendingSaves.current[messageId]
           Alert.alert('Save denied', 'The sender did not allow saving this file.')
@@ -637,9 +637,9 @@ export default function ChatScreen({ route, navigation }) {
     }
   }
 
-  async function saveToDevice(payload, contentType, label, expiresAt) {
+  async function saveToDevice(payload, contentType, label, expiresAt, messageId) {
     try {
-      await saveToLibrary({ payload, contentType, label, fromUsername: recipientUsername, expiresAt: expiresAt ?? null })
+      await saveToLibrary({ payload, contentType, label, fromUsername: recipientUsername, expiresAt: expiresAt ?? null, messageId: messageId ?? null })
       const msg = expiresAt
         ? `Added to your Blink Library. Expires ${new Date(expiresAt).toLocaleString()}.`
         : 'Added to your Blink Library.'

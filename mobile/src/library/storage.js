@@ -9,7 +9,7 @@ async function ensureDir() {
   if (!exists) await RNFS.mkdir(LIB_DIR)
 }
 
-export async function saveToLibrary({ payload, contentType, label, fromUsername, fromGroupId, groupName, expiresAt }) {
+export async function saveToLibrary({ payload, contentType, label, fromUsername, fromGroupId, groupName, expiresAt, messageId }) {
   await ensureDir()
   const ext = contentType === 'image' ? 'jpg' : contentType === 'video' ? 'mp4' : 'bin'
   const id = `${Date.now()}_${Math.random().toString(36).slice(2)}`
@@ -23,7 +23,7 @@ export async function saveToLibrary({ payload, contentType, label, fromUsername,
   }
 
   const index = await loadIndex(false)
-  index.push({ id, filename, path, contentType, label: label ?? filename, fromUsername, fromGroupId: fromGroupId ?? null, groupName: groupName ?? null, savedAt: Date.now(), expiresAt: expiresAt ?? null })
+  index.push({ id, filename, path, contentType, label: label ?? filename, fromUsername, fromGroupId: fromGroupId ?? null, groupName: groupName ?? null, savedAt: Date.now(), expiresAt: expiresAt ?? null, messageId: messageId ?? null })
   await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(index))
   return id
 }

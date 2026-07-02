@@ -34,12 +34,13 @@ pool.query(`CREATE TABLE IF NOT EXISTS feedback (
 pool.query(`CREATE TABLE IF NOT EXISTS extend_requests (
   id SERIAL PRIMARY KEY,
   library_item_id TEXT NOT NULL,
+  message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
   requester_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'pending',
   expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
-)`).then(() => console.log('extend_requests table ready')).catch(e => console.error('extend_requests migration failed:', e.message))
+)`).then(() => pool.query(`ALTER TABLE extend_requests ADD COLUMN IF NOT EXISTS message_id UUID REFERENCES messages(id) ON DELETE SET NULL`).catch(() => {})).then(() => console.log('extend_requests table ready')).catch(e => console.error('extend_requests migration failed:', e.message))
 pool.query(`CREATE TABLE IF NOT EXISTS accepted_contacts (
   user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   contact_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

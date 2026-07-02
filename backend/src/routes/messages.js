@@ -472,12 +472,13 @@ export async function messageRoutes(app) {
         properties: {
           libraryItemId: { type: 'string' },
           senderUsername: { type: 'string' },
+          messageId: { type: 'string', nullable: true },
         },
       },
     },
   }, async (req, reply) => {
     try {
-      const { libraryItemId, senderUsername } = req.body
+      const { libraryItemId, senderUsername, messageId } = req.body
       const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [senderUsername.toLowerCase()])
       if (!rows.length) return reply.code(404).send({ error: 'Sender not found' })
       const senderId = rows[0].id
@@ -488,8 +489,9 @@ export async function messageRoutes(app) {
       )
       if (existing.length) return reply.code(409).send({ error: 'Request already pending' })
       const { rows: inserted } = await pool.query(
-        `INSERT INTO extend_requests (library_item_id, requester_id, sender_id) VALUES ($1, $2, $3) RETURNING id`,
-        [libraryItemId, req.user.userId, senderId]
+        `INSERT INTO extend_requests (library_item_id, message_id, requester_id, sender_id)
+         VALUES ($1, $2::uuid, $3, $4) RETURNING id`,
+        [libraryItemId, messageId ?? null, req.user.userId, senderId]
       )
       // Notify sender via push
       const { rows: senderRow } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [senderId])
@@ -507,9 +509,11 @@ export async function messageRoutes(app) {
   // Sender polls for pending extend requests they need to decide on
   app.get('/messages/extend-requests/pending', async (req) => {
     const { rows } = await pool.query(
-      `SELECT er.id, er.library_item_id, u.username AS requester_username
+      `SELECT er.id, er.library_item_id, er.message_id, u.username AS requester_username,
+              m.content_type
        FROM extend_requests er
        JOIN users u ON u.id = er.requester_id
+       LEFT JOIN messages m ON m.id = er.message_id
        WHERE er.sender_id = $1 AND er.status = 'pending'
        ORDER BY er.created_at ASC`,
       [req.user.userId]

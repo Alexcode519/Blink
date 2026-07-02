@@ -49,6 +49,7 @@ export default function LibraryScreen({ navigation, route }) {
       const { id: requestId } = await api.post('/messages/extend-requests', {
         libraryItemId: item.id,
         senderUsername: item.fromUsername,
+        messageId: item.messageId ?? null,  // pass original message ID for thumbnail
       })
       Alert.alert('Requested', 'Your request has been sent. We\'ll update the item when they respond.')
       pendingExtend.current[item.id] = requestId
