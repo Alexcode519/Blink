@@ -31,6 +31,11 @@ export async function displayMessageNotification(remoteMessage) {
     const sender  = data.senderUsername ?? ''
     const groupId = data.groupId ?? ''
 
+    // Only show foreground banners for actual chat messages — save/extend requests
+    // are handled by in-chat polling modals, so a tappable banner would just confuse navigation
+    const isChatMessage = data.type === 'new_group_message' || !!data.senderUsername
+    if (!isChatMessage) return
+
     // Skip the popup if the user is already looking at that conversation
     const activeKey = isGroup ? `group:${groupId}` : sender
     if (activeKey && activeKey === getActiveChat()) return
