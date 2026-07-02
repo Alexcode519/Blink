@@ -530,7 +530,7 @@ export async function groupRoutes(app) {
 
   // Sender approves or denies a group save request
   app.patch('/groups/save-requests/:requestId', {
-    schema: { body: { type: 'object', required: ['decision'], properties: { decision: { type: 'string' }, expiresHours: { type: ['number', 'null'] } } } },
+    schema: { body: { type: 'object', required: ['decision'], properties: { decision: { type: 'string', enum: ['approved', 'denied'] }, expiresHours: { type: 'number', nullable: true } } } },
   }, async (req, reply) => {
     const { decision, expiresHours } = req.body
     const expiresAt = expiresHours ? new Date(Date.now() + expiresHours * 3600 * 1000).toISOString() : null

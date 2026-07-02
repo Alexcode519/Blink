@@ -1321,7 +1321,12 @@ export default function ChatScreen({ route, navigation }) {
             dismissedSaveIds.current.add(id)
             saveRequestRef.current = null
             setSaveRequest(null)
-            try { await api.patch(`/messages/save-requests/${id}`, { decision, expiresHours }) } catch {}
+            try {
+              await api.patch(`/messages/save-requests/${id}`, {
+                decision,
+                ...(expiresHours != null ? { expiresHours } : {}),
+              })
+            } catch (e) { Alert.alert('Error', 'Could not send response: ' + e.message) }
           }}
           onCancel={() => {
             dismissedSaveIds.current.add(saveRequest.id)

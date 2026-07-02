@@ -351,16 +351,20 @@ export default function GroupChatScreen({ route, navigation }) {
           delete pendingGroupSaves.current[msgId]
           const b64 = item.uri?.replace(/^data:[^;]+;base64,/, '')
           if (!b64) continue
-          const result = await saveToLibrary({
-            payload: b64, contentType: item.contentType, label: item.filename,
-            fromGroupId: groupId, groupName, messageId: item.id ?? null,
-            expiresAt: expires_at ?? null,
-          })
-          if (!result?.alreadySaved) {
-            const msg = expires_at
-              ? `Added to your Blink Library. Expires ${new Date(expires_at).toLocaleString()}.`
-              : 'Added to your Blink Library.'
-            Alert.alert('Saved', msg)
+          try {
+            const result = await saveToLibrary({
+              payload: b64, contentType: item.contentType, label: item.filename,
+              fromGroupId: groupId, groupName, messageId: item.id ?? null,
+              expiresAt: expires_at ?? null,
+            })
+            if (!result?.alreadySaved) {
+              const msg = expires_at
+                ? `Added to your Blink Library. Expires ${new Date(expires_at).toLocaleString()}.`
+                : 'Added to your Blink Library.'
+              Alert.alert('Saved', msg)
+            }
+          } catch (saveErr) {
+            Alert.alert('Save failed', saveErr.message)
           }
         } else if (status === 'denied') {
           delete pendingGroupSaves.current[msgId]
@@ -377,8 +381,13 @@ export default function GroupChatScreen({ route, navigation }) {
     groupSaveRequestRef.current = null
     setGroupSaveRequest(null)
     try {
-      await api.patch(`/groups/save-requests/${req.id}`, { decision, expiresHours: expiresHours ?? undefined })
-    } catch {}
+      await api.patch(`/groups/save-requests/${req.id}`, {
+        decision,
+        ...(expiresHours != null ? { expiresHours } : {}),
+      })
+    } catch (e) {
+      Alert.alert('Error', 'Could not send response: ' + e.message)
+    }
   }
 
   function seenByCount(item) {
