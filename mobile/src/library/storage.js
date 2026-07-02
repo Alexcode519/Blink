@@ -11,6 +11,15 @@ async function ensureDir() {
 
 export async function saveToLibrary({ payload, contentType, label, fromUsername, fromGroupId, groupName, expiresAt, messageId }) {
   await ensureDir()
+
+  // Duplicate check — same messageId already saved
+  if (messageId) {
+    const existing = await loadIndex(false)
+    if (existing.some(i => i.messageId === messageId)) {
+      return { alreadySaved: true }
+    }
+  }
+
   const ext = contentType === 'image' ? 'jpg' : contentType === 'video' ? 'mp4' : 'bin'
   const id = `${Date.now()}_${Math.random().toString(36).slice(2)}`
   const filename = `${id}.${ext}`
@@ -25,7 +34,7 @@ export async function saveToLibrary({ payload, contentType, label, fromUsername,
   const index = await loadIndex(false)
   index.push({ id, filename, path, contentType, label: label ?? filename, fromUsername, fromGroupId: fromGroupId ?? null, groupName: groupName ?? null, savedAt: Date.now(), expiresAt: expiresAt ?? null, messageId: messageId ?? null })
   await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(index))
-  return id
+  return { id }
 }
 
 export async function loadIndex(pruneExpired = true) {

@@ -128,3 +128,14 @@ pool.query(`CREATE TABLE IF NOT EXISTS message_reactions (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (message_id, user_id)
 )`).catch(e => console.error('message_reactions migration failed:', e.message))
+
+// Group save requests
+pool.query(`CREATE TABLE IF NOT EXISTS group_save_requests (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id  UUID NOT NULL REFERENCES group_messages(id) ON DELETE CASCADE,
+  requester_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status      TEXT NOT NULL DEFAULT 'pending',
+  expires_at  TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (message_id, requester_id)
+)`).catch(e => console.error('group_save_requests migration failed:', e.message))

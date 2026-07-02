@@ -479,6 +479,93 @@ export async function groupRoutes(app) {
     return { ok: true }
   })
 
+  // ── Group save requests ────────────────────────────────────────────────────
+
+  // Member requests to save another member's message
+  app.post('/groups/:groupId/messages/:messageId/save-request', async (req, reply) => {
+    const { messageId } = req.params
+    // Verify message exists in this group and requester is not the sender
+    const { rows: msgs } = await pool.query(
+      `SELECT gm.id, gm.sender_id, gm.content_type, u.fcm_token, u.username AS sender_username,
+              r.username AS requester_username
+       FROM group_messages gm
+       JOIN users u ON u.id = gm.sender_id
+       JOIN users r ON r.id = $2
+       WHERE gm.id = $1`,
+      [messageId, req.user.userId]
+    )
+    if (!msgs.length) return reply.code(404).send({ error: 'Message not found' })
+    if (msgs[0].sender_id === req.user.userId) return reply.code(400).send({ error: 'Cannot request to save your own message' })
+
+    const { rows } = await pool.query(
+      `INSERT INTO group_save_requests (message_id, requester_id)
+       VALUES ($1, $2)
+       ON CONFLICT (message_id, requester_id) DO UPDATE SET status = 'pending', expires_at = NULL
+       RETURNING id`,
+      [messageId, req.user.userId]
+    )
+
+    await sendPushNotification(
+      msgs[0].fcm_token,
+      'Save request',
+      `${msgs[0].requester_username} wants to save something you sent in a group`,
+      { type: 'group_save_request' }
+    ).catch(() => {})
+
+    return { requestId: rows[0].id }
+  })
+
+  // Sender polls for pending group save requests on their sent messages
+  app.get('/groups/save-requests/pending', async (req) => {
+    const { rows } = await pool.query(
+      `SELECT gsr.id, gsr.message_id, gm.content_type, u.username AS requester_username
+       FROM group_save_requests gsr
+       JOIN group_messages gm ON gm.id = gsr.message_id
+       JOIN users u ON u.id = gsr.requester_id
+       WHERE gm.sender_id = $1 AND gsr.status = 'pending'`,
+      [req.user.userId]
+    )
+    return { requests: rows }
+  })
+
+  // Sender approves or denies a group save request
+  app.patch('/groups/save-requests/:requestId', {
+    schema: { body: { type: 'object', required: ['decision'], properties: { decision: { type: 'string' }, expiresHours: { type: ['number', 'null'] } } } },
+  }, async (req, reply) => {
+    const { decision, expiresHours } = req.body
+    const expiresAt = expiresHours ? new Date(Date.now() + expiresHours * 3600 * 1000).toISOString() : null
+
+    const { rows } = await pool.query(
+      `UPDATE group_save_requests gsr SET status = $1, expires_at = $4
+       FROM group_messages gm JOIN users u ON u.id = gsr.requester_id
+       WHERE gsr.id = $2 AND gsr.message_id = gm.id AND gm.sender_id = $3
+       RETURNING gsr.id, u.fcm_token, u.username AS requester_username`,
+      [decision, req.params.requestId, req.user.userId, expiresAt]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Not found' })
+
+    await sendPushNotification(
+      rows[0].fcm_token,
+      decision === 'approved' ? 'Save approved' : 'Save denied',
+      decision === 'approved' ? 'Your save request was approved' : 'Your save request was denied',
+      { type: 'group_save_response', requestId: req.params.requestId, decision }
+    ).catch(() => {})
+
+    return { ok: true }
+  })
+
+  // Requester polls for the outcome of their group save request
+  app.get('/groups/save-requests/:requestId/status', async (req, reply) => {
+    const { rows } = await pool.query(
+      `SELECT gsr.status, gsr.expires_at
+       FROM group_save_requests gsr
+       WHERE gsr.id = $1 AND gsr.requester_id = $2`,
+      [req.params.requestId, req.user.userId]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Not found' })
+    return rows[0]
+  })
+
   // Leave a group
   app.delete('/groups/:groupId/members/me', async (req, reply) => {
     const { groupId } = req.params

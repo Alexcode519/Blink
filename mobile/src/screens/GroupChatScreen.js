@@ -18,6 +18,7 @@ import Icon from 'react-native-vector-icons/Feather'
 import notifee from '@notifee/react-native'
 import { setActiveChat, clearActiveChat } from '../notifications/activeChat'
 import { notifIdForGroup } from '../notifications/setup'
+import SaveRequestModal from '../components/SaveRequestModal'
 
 const POLL_INTERVAL = 3000
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
@@ -47,6 +48,9 @@ export default function GroupChatScreen({ route, navigation }) {
   const [playbackPos, setPlaybackPos]   = useState(0)
   const [playbackDur, setPlaybackDur]   = useState(0)
   const audioRecorder = useRef(new AudioRecorderPlayer()).current
+
+  const [groupSaveRequest, setGroupSaveRequest] = useState(null) // sender-side pending request
+  const pendingGroupSaves = useRef({})  // requester-side: { [messageId]: { requestId, item } }
 
   const groupKeyRef   = useRef(null)   // Uint8Array once decrypted
   const latestAtRef   = useRef(null)   // ISO string of last received message
@@ -97,11 +101,12 @@ export default function GroupChatScreen({ route, navigation }) {
       reactionTimer = setInterval(pollReactions, POLL_INTERVAL)
       readsTimer = setInterval(pollReads, POLL_INTERVAL)
       typingTimer = setInterval(pollTyping, 2000)
+      saveReqTimer = setInterval(pollGroupSaveRequests, POLL_INTERVAL)
       pollReads()
       pollTyping()
     }
 
-    let reactionTimer, readsTimer, typingTimer
+    let reactionTimer, readsTimer, typingTimer, saveReqTimer
     init()
     notifee.cancelNotification(notifIdForGroup(groupId)).catch(() => {})
     setActiveChat(`group:${groupId}`)
@@ -109,7 +114,7 @@ export default function GroupChatScreen({ route, navigation }) {
     const blurSub  = navigation.addListener('blur', () => clearActiveChat())
 
     return () => {
-      clearInterval(inboxTimer); clearInterval(reactionTimer); clearInterval(readsTimer); clearInterval(typingTimer)
+      clearInterval(inboxTimer); clearInterval(reactionTimer); clearInterval(readsTimer); clearInterval(typingTimer); clearInterval(saveReqTimer)
       focusSub(); blurSub()
       clearActiveChat()
     }
@@ -302,20 +307,69 @@ export default function GroupChatScreen({ route, navigation }) {
   }
 
   async function saveToGroupLibrary(item) {
-    try {
-      const b64 = item.uri?.replace(/^data:[^;]+;base64,/, '')
-      if (!b64) return
-      await saveToLibrary({
-        payload: b64,
-        contentType: item.contentType,
-        label: item.filename,
-        fromGroupId: groupId,
-        groupName,
-      })
-      Alert.alert('Saved', 'Added to your Blink Library.')
-    } catch (e) {
-      Alert.alert('Save failed', e.message)
+    // Own messages: save directly, no approval needed
+    if (item.mine) {
+      try {
+        const b64 = item.uri?.replace(/^data:[^;]+;base64,/, '')
+        if (!b64) return
+        const result = await saveToLibrary({
+          payload: b64, contentType: item.contentType, label: item.filename,
+          fromGroupId: groupId, groupName, messageId: item.messageId ?? null,
+        })
+        if (result?.alreadySaved) { Alert.alert('Already saved', 'This file is already in your Blink Library.'); return }
+        Alert.alert('Saved', 'Added to your Blink Library.')
+      } catch (e) { Alert.alert('Save failed', e.message) }
+      return
     }
+
+    // Others' messages: send a save request to the sender
+    try {
+      const { requestId } = await api.post(`/groups/${groupId}/messages/${item.id}/save-request`, {})
+      pendingGroupSaves.current[item.id] = { requestId, item }
+      Alert.alert('Save requested', 'Waiting for the sender to approve.')
+    } catch (e) { Alert.alert('Error', e.message) }
+  }
+
+  // Sender-side: poll for pending group save requests
+  async function pollGroupSaveRequests() {
+    try {
+      const { requests } = await api.get('/groups/save-requests/pending')
+      if (requests?.length && !groupSaveRequest) setGroupSaveRequest(requests[0])
+    } catch {}
+
+    // Requester-side: check status of any pending saves we sent
+    for (const [msgId, { requestId, item }] of Object.entries(pendingGroupSaves.current)) {
+      try {
+        const { status, expires_at } = await api.get(`/groups/save-requests/${requestId}/status`)
+        if (status === 'approved') {
+          delete pendingGroupSaves.current[msgId]
+          const b64 = item.uri?.replace(/^data:[^;]+;base64,/, '')
+          if (!b64) continue
+          const result = await saveToLibrary({
+            payload: b64, contentType: item.contentType, label: item.filename,
+            fromGroupId: groupId, groupName, messageId: item.messageId ?? null,
+            expiresAt: expires_at ?? null,
+          })
+          if (!result?.alreadySaved) {
+            const msg = expires_at
+              ? `Added to your Blink Library. Expires ${new Date(expires_at).toLocaleString()}.`
+              : 'Added to your Blink Library.'
+            Alert.alert('Saved', msg)
+          }
+        } else if (status === 'denied') {
+          delete pendingGroupSaves.current[msgId]
+          Alert.alert('Save denied', 'The sender did not approve saving this file.')
+        }
+      } catch {}
+    }
+  }
+
+  async function handleGroupSaveDecide(decision, expiresHours) {
+    if (!groupSaveRequest) return
+    try {
+      await api.patch(`/groups/save-requests/${groupSaveRequest.id}`, { decision, expiresHours: expiresHours ?? undefined })
+    } catch {}
+    setGroupSaveRequest(null)
   }
 
   function seenByCount(item) {
@@ -327,14 +381,15 @@ export default function GroupChatScreen({ route, navigation }) {
   // ── Attachments ─────────────────────────────────────────────────────────────
   async function pickImage(useCamera) {
     setShowAttachMenu(false)
+    pickerGuard.start()
     if (useCamera && PermissionsAndroid) {
       const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA)
       if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        pickerGuard.end()
         Alert.alert('Permission denied', 'Camera permission is required to take photos.')
         return
       }
     }
-    pickerGuard.start()
     try {
       const result = useCamera
         ? await launchCamera({ mediaType: 'photo', quality: 0.7, includeBase64: true })
@@ -514,6 +569,13 @@ export default function GroupChatScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
+      {groupSaveRequest && (
+        <SaveRequestModal
+          request={groupSaveRequest}
+          onDecide={handleGroupSaveDecide}
+          onCancel={() => setGroupSaveRequest(null)}
+        />
+      )}
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack}>
