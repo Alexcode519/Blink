@@ -15,13 +15,13 @@ export function registerBackgroundHandler() {
     const sender = data.senderUsername ?? ''
     if (sender && myUsername && sender.toLowerCase() === myUsername.toLowerCase()) return
 
-    await notifee.createChannel({ id: 'blink_messages', name: 'Messages', importance: AndroidImportance.HIGH })
+    await notifee.createChannel({ id: 'blink_messages_v2', name: 'Messages', importance: AndroidImportance.HIGH })
     await notifee.displayNotification({
       title,
       body,
       data,
       android: {
-        channelId: 'blink_messages',
+        channelId: 'blink_messages_v2',
         importance: AndroidImportance.HIGH,
         pressAction: { id: 'default' },
       },

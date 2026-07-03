@@ -5,9 +5,11 @@ import { api } from '../api/client'
 import { getActiveChat } from './activeChat'
 
 // Audible channel — used when the app is in background/killed
+// v2 suffix forces Android to recreate it with HIGH importance (channel importance is immutable once set)
 async function ensureChannel() {
+  await notifee.deleteChannel('blink_messages').catch(() => {})
   await notifee.createChannel({
-    id: 'blink_messages',
+    id: 'blink_messages_v2',
     name: 'Messages',
     importance: AndroidImportance.HIGH,
     vibration: true,
@@ -102,7 +104,7 @@ export async function displayBackgroundNotification(remoteMessage) {
       body,
       data,
       android: {
-        channelId: 'blink_messages',
+        channelId: 'blink_messages_v2',
         importance: AndroidImportance.HIGH,
         pressAction: { id: 'default' },
       },
