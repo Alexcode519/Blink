@@ -158,13 +158,13 @@ export default function ChatsScreen({ navigation }) {
   function blockUser(username) {
     Alert.alert(
       'Block user?',
-      `${username} won't be able to send you messages. You can unblock them from their profile.`,
+      `${username} won't be able to send you messages. You can unblock them from Settings.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Block', style: 'destructive', onPress: async () => {
           try {
             await api.post(`/users/block/${username}`)
-            Alert.alert('Blocked', `${username} has been blocked.`)
+            setConversations(prev => prev.filter(c => c.other_username !== username))
           } catch (err) {
             Alert.alert('Error', err.message)
           }

@@ -1133,9 +1133,6 @@ export default function ChatScreen({ route, navigation }) {
           >
             <Icon name="shield" size={20} color="#888" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={toggleBlock}>
-            <Icon name={isBlocked ? 'slash' : 'user-x'} size={20} color={isBlocked ? '#ff4444' : '#888'} />
-          </TouchableOpacity>
         </View>
       </View>
 

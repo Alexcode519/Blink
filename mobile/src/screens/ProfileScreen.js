@@ -43,7 +43,8 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
   const [disappearingHours, setDisappearingHours] = useState(null)
   const [disappearingDropdownOpen, setDisappearingDropdownOpen] = useState(false)
   const [duressSet, setDuressSet] = useState(false)
-  const [openSection, setOpenSection] = useState(null) // 'account' | 'preferences' | 'security' | 'help' | null
+  const [blockedUsers, setBlockedUsers] = useState([])
+  const [openSection, setOpenSection] = useState(null) // 'account' | 'preferences' | 'security' | 'help' | 'blocked' | null
 
   function toggleSection(key) {
     setOpenSection(prev => prev === key ? null : key)
@@ -59,11 +60,13 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
     AsyncStorage.getItem('blink_duress_pattern').then(v => setDuressSet(!!v))
     const unsub = navigation.addListener('focus', () => {
       AsyncStorage.getItem('blink_duress_pattern').then(v => setDuressSet(!!v))
+      api.get('/users/blocked').then(({ blocked }) => setBlockedUsers(blocked)).catch(() => {})
     })
     AsyncStorage.getItem('blink_biometric_enabled').then(v => setBiometricEnabled(v === 'true'))
     AsyncStorage.getItem('blink_language').then(v => { if (v) setLanguage(v) })
     AsyncStorage.getItem('blink_font_size').then(v => { if (v) setLocalFontSizeKey(v) })
     isBiometricAvailable().then(({ available }) => setBiometricAvailable(available))
+    api.get('/users/blocked').then(({ blocked }) => setBlockedUsers(blocked)).catch(() => {})
     api.get('/users/me/profile').then(p => {
       if (p.created_at) {
         setJoinedDate(new Date(p.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))
@@ -505,6 +508,43 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
         )}
       </View>
 
+      {/* Blocked Users section */}
+      <View style={styles.section}>
+        <TouchableOpacity style={styles.collapseRow} onPress={() => toggleSection('blocked')}>
+          <Text style={styles.sectionTitle}>Blocked Users</Text>
+          <Text style={styles.sectionChevron}>{openSection === 'blocked' ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        {openSection === 'blocked' && (
+          <View style={styles.sectionBody}>
+            {blockedUsers.length === 0 ? (
+              <Text style={{ color: '#555', fontSize: 14, textAlign: 'center', paddingVertical: 8 }}>No blocked users</Text>
+            ) : (
+              blockedUsers.map(u => (
+                <View key={u} style={styles.blockedRow}>
+                  <Text style={styles.blockedName}>{u}</Text>
+                  <TouchableOpacity
+                    style={styles.unblockBtn}
+                    onPress={() =>
+                      Alert.alert('Unblock', `Allow ${u} to message you again?`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Unblock', onPress: async () => {
+                          try {
+                            await api.delete(`/users/block/${u}`)
+                            setBlockedUsers(prev => prev.filter(b => b !== u))
+                          } catch (e) { Alert.alert('Error', e.message) }
+                        }},
+                      ])
+                    }
+                  >
+                    <Text style={styles.unblockBtnText}>Unblock</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+      </View>
+
       {/* Help section */}
       <View style={styles.section}>
         <TouchableOpacity style={styles.collapseRow} onPress={() => toggleSection('help')}>
@@ -614,4 +654,8 @@ const styles = StyleSheet.create({
   langCheck:        { color: '#4f6ef7', fontSize: 16, fontWeight: '700' },
   modalClose:       { marginHorizontal: 24, marginTop: 12, backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14, alignItems: 'center' },
   modalCloseText:   { color: '#888', fontWeight: '600', fontSize: 15 },
+  blockedRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1f1f1f' },
+  blockedName:      { color: '#fff', fontSize: 15 },
+  unblockBtn:       { backgroundColor: '#1a2a4a', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6 },
+  unblockBtnText:   { color: '#4f6ef7', fontSize: 13, fontWeight: '600' },
 })
