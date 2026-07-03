@@ -61,7 +61,6 @@ export default function ChatsScreen({ navigation }) {
   const [pendingInvites, setPendingInvites] = useState([])
   const isFocused = useRef(false)
   const [localUnread, setLocalUnread] = useState({}) // username -> count, incremented on FCM arrival
-  const [debugMsg, setDebugMsg] = useState('')
   const deletedConvs = useRef(new Set()) // usernames deleted this session — cleared when they reappear with new messages
 
   const CACHE_KEY_CONVS   = 'blink_cache_conversations'
@@ -77,8 +76,7 @@ export default function ChatsScreen({ navigation }) {
           return true
         })
         setConversations(filtered)
-        setDebugMsg(`OK: ${filtered.length} convs (raw: ${c.length})`)
-        AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(filtered)).catch(() => {})
+          AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(filtered)).catch(() => {})
       })
       .catch((err) => { setDebugMsg('ERR: ' + (err?.message ?? 'unknown')) })
       .finally(() => setLoading(false))
