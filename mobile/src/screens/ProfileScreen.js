@@ -173,9 +173,12 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign out', style: 'destructive', onPress: () => {
-          AsyncStorage.multiRemove(['token', 'username', 'blink_cache_conversations', 'blink_cache_groups']).then(() => {
-            onLogout()
-          })
+          Promise.all([
+            AsyncStorage.removeItem('token'),
+            AsyncStorage.removeItem('username'),
+            AsyncStorage.removeItem('blink_cache_conversations'),
+            AsyncStorage.removeItem('blink_cache_groups'),
+          ]).then(() => onLogout())
         },
       },
     ])
@@ -437,7 +440,9 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
                   unsub()
                 })
               } else {
-                await AsyncStorage.multiRemove(['blink_pattern', 'blink_pattern_enabled', 'blink_duress_pattern'])
+                await AsyncStorage.removeItem('blink_pattern')
+                await AsyncStorage.removeItem('blink_pattern_enabled')
+                await AsyncStorage.removeItem('blink_duress_pattern')
                 setPatternEnabled(false)
                 setDuressSet(false)
               }

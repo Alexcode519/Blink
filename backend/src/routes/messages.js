@@ -231,10 +231,13 @@ export async function messageRoutes(app) {
     )
     if (!other.length) return reply.code(404).send({ error: 'User not found' })
     const { rows } = await pool.query(
-      'SELECT 1 FROM accepted_contacts WHERE user_id = $1 AND contact_id = $2',
+      `SELECT 1 FROM messages
+       WHERE sender_id = $2 AND recipient_id = $1
+       AND NOT EXISTS (SELECT 1 FROM accepted_contacts WHERE user_id = $1 AND contact_id = $2)
+       LIMIT 1`,
       [req.user.userId, other[0].id]
     )
-    return { requested: !rows.length }
+    return { requested: rows.length > 0 }
   })
 
   // Explicitly accept a message request without having to reply first
