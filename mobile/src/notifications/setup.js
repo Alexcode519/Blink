@@ -2,9 +2,6 @@ import messaging from '@react-native-firebase/messaging'
 import notifee, { AndroidImportance } from '@notifee/react-native'
 import { api } from '../api/client'
 import { getActiveChat } from './activeChat'
-import { decryptFromSender } from '../crypto/keys'
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import RNFS from 'react-native-fs'
 
 async function ensureChannel() {
   await notifee.createChannel({
@@ -24,24 +21,6 @@ export function notifIdForGroup(groupId) {
   return `group_${groupId}`
 }
 
-// Pre-decrypt a view-once media message in the background so ChatScreen finds it ready.
-async function prefetchViewOnce(messageId, senderUsername, contentType) {
-  try {
-    const existing = await AsyncStorage.getItem(`blink_vo_${messageId}`)
-    if (existing) return // already cached
-    const { ciphertext, nonce } = await api.get(`/messages/${messageId}/ciphertext`)
-    // Need sender's public key to decrypt
-    const { publicKey } = await api.get(`/users/${senderUsername}`)
-    const decoded = await decryptFromSender(ciphertext, nonce, publicKey)
-    const ext = contentType === 'image' ? 'jpg' : 'mp4'
-    const path = `${RNFS.CachesDirectoryPath}/blink_media_${messageId}.${ext}`
-    await RNFS.writeFile(path, decoded, 'base64')
-    await AsyncStorage.setItem(`blink_vo_${messageId}`, `file://${path}`)
-  } catch (e) {
-    // Silent — ChatScreen will fall back to decrypting on open
-  }
-}
-
 export async function displayMessageNotification(remoteMessage) {
   try {
     await ensureChannel()
@@ -51,11 +30,6 @@ export async function displayMessageNotification(remoteMessage) {
     const isGroup = data.type === 'new_group_message'
     const sender  = data.senderUsername ?? ''
     const groupId = data.groupId ?? ''
-
-    // Pre-decrypt view-once media in background so it's ready when user opens chat
-    if (data.viewOnce === 'true' && data.messageId && (data.contentType === 'image' || data.contentType === 'video') && sender) {
-      prefetchViewOnce(data.messageId, sender, data.contentType).catch(() => {})
-    }
 
     // Only show foreground banners for actual chat messages — save/extend requests
     // are handled by in-chat polling modals, so a tappable banner would just confuse navigation

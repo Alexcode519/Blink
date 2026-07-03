@@ -62,11 +62,17 @@ export default function AppNavigator() {
 
   useEffect(() => {
     async function check() {
-      await initToken()   // warm the token cache before any API call
+      // Run all startup reads in parallel — notification checks and local storage together
+      const [initial, notifeeInitial, , token, patternEnabled, pattern] = await Promise.all([
+        messaging().getInitialNotification().catch(() => null),
+        notifee.getInitialNotification().catch(() => null),
+        initToken(),  // warms _token cache
+        AsyncStorage.getItem('token'),
+        AsyncStorage.getItem('blink_pattern_enabled'),
+        AsyncStorage.getItem('blink_pattern'),
+      ])
+
       try {
-        // Check both Firebase (data-only foreground path) and Notifee (background.js cold-start path)
-        const initial = await messaging().getInitialNotification()
-        const notifeeInitial = await notifee.getInitialNotification()
         const d = initial?.data ?? notifeeInitial?.notification?.data
         if (d?.type === 'new_group_message' && d?.groupId) {
           pendingChatRef.current = { group: true, groupId: d.groupId }
@@ -83,21 +89,19 @@ export default function AppNavigator() {
         }
       } catch {}
 
-      const token = await AsyncStorage.getItem('token')
       if (!token) { setAuthState('loggedOut'); return }
-      // Re-upload public key derived from stored private key — self-heals any server/device mismatch
-      try {
-        const publicKey = await syncPublicKey()
-        await api.patch('/users/me/public-key', { publicKey })
-      } catch {}
 
-      const patternEnabled = await AsyncStorage.getItem('blink_pattern_enabled')
-      const pattern = await AsyncStorage.getItem('blink_pattern')
+      // Show lock screen immediately — don't block UI on the network round-trip
       if (patternEnabled === 'true' && pattern) {
         setAuthState('pattern')
       } else {
         setAuthState('locked')
       }
+
+      // Re-upload public key in background — self-heals any server/device mismatch
+      syncPublicKey()
+        .then(publicKey => api.patch('/users/me/public-key', { publicKey }))
+        .catch(() => {})
     }
     check()
   }, [])
@@ -106,18 +110,29 @@ export default function AppNavigator() {
     // Notification tapped while app is in background (locked or running)
     const unsub = messaging().onNotificationOpenedApp((remoteMessage) => {
       const d = remoteMessage?.data
+      let pending = null
       if (d?.type === 'new_group_message' && d?.groupId) {
-        pendingChatRef.current = { group: true, groupId: d.groupId }
+        pending = { group: true, groupId: d.groupId }
       } else if (d?.type === 'group_save_request' && d?.groupId) {
-        pendingChatRef.current = { group: true, groupId: d.groupId }
+        pending = { group: true, groupId: d.groupId }
       } else if (d?.type === 'save_request' && d?.requesterUsername) {
-        pendingChatRef.current = { group: false, senderUsername: d.requesterUsername }
+        pending = { group: false, senderUsername: d.requesterUsername }
       } else if (d?.type === 'contact_invite') {
-        // Leave pendingChatRef null — ChatsScreen shows the invite banner on focus
+        // Leave null — ChatsScreen shows the invite banner on focus
       } else if (d?.type === 'qr_claimed' && d?.claimerUsername) {
-        pendingChatRef.current = { group: false, senderUsername: d.claimerUsername }
+        pending = { group: false, senderUsername: d.claimerUsername }
       } else if (d?.senderUsername) {
-        pendingChatRef.current = { group: false, senderUsername: d.senderUsername }
+        pending = { group: false, senderUsername: d.senderUsername }
+      }
+      if (!pending) return
+      // If nav is already mounted (app was in background), navigate immediately
+      const nav = navRef.current
+      if (nav?.isReady()) {
+        if (pending.group) nav.navigate('GroupChat', { groupId: pending.groupId })
+        else nav.navigate('Chat', { recipientUsername: pending.senderUsername })
+      } else {
+        // Nav not ready yet (cold start) — onNavReady will handle it
+        pendingChatRef.current = pending
       }
     })
     return () => unsub()

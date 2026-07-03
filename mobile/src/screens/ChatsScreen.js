@@ -60,6 +60,7 @@ export default function ChatsScreen({ navigation }) {
   const [pendingInvites, setPendingInvites] = useState([])
   const isFocused = useRef(false)
   const [localUnread, setLocalUnread] = useState({}) // username -> count, incremented on FCM arrival
+  const deletedConvs = useRef(new Set()) // usernames deleted this session — cleared when they reappear with new messages
 
   const CACHE_KEY_CONVS   = 'blink_cache_conversations'
   const CACHE_KEY_GROUPS  = 'blink_cache_groups'
@@ -67,8 +68,14 @@ export default function ChatsScreen({ navigation }) {
   function loadConversations() {
     api.get('/messages/conversations')
       .then(({ conversations: c }) => {
-        setConversations(c)
-        AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(c)).catch(() => {})
+        const filtered = c.filter(conv => {
+          if (!deletedConvs.current.has(conv.other_username)) return true
+          // Deleted user reappeared — they must have sent new messages; unblock and show them
+          deletedConvs.current.delete(conv.other_username)
+          return true
+        })
+        setConversations(filtered)
+        AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(filtered)).catch(() => {})
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -124,6 +131,8 @@ export default function ChatsScreen({ navigation }) {
     const unsubFCM = messaging().onMessage((msg) => {
       const sender = msg?.data?.senderUsername
       if (sender) {
+        // New message from this sender — let their conversation through even if recently deleted
+        deletedConvs.current.delete(sender)
         setLocalUnread(prev => ({ ...prev, [sender]: (prev[sender] ?? 0) + 1 }))
       }
       if (isFocused.current) loadConversations()
@@ -184,16 +193,17 @@ export default function ChatsScreen({ navigation }) {
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
           try {
-            await api.delete(`/messages/conversation/${username}`)
-            // Clear local message cache so history doesn't reappear
-            await AsyncStorage.removeItem(`blink_chat_${username}`)
-            // Update conversations cache so the person doesn't flash back on next open
+            const { deleted } = await api.delete(`/messages/conversation/${username}`)
+            deletedConvs.current.add(username)
+            // Clear local message cache and update conversations cache
+            await AsyncStorage.multiRemove([`blink_chat_${username}`])
             const cached = await AsyncStorage.getItem(CACHE_KEY_CONVS)
             if (cached) {
               const updated = JSON.parse(cached).filter(c => c.other_username !== username)
               await AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(updated))
             }
             setConversations(prev => prev.filter(c => c.other_username !== username))
+            Alert.alert('Deleted', `Chat with ${username} deleted. (${deleted ?? 0} messages removed from server)`)
           } catch (err) {
             Alert.alert('Error', err.message)
           }

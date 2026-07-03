@@ -22,19 +22,25 @@ import { notifIdForSender } from '../notifications/setup'
 import { setActiveChat, clearActiveChat } from '../notifications/activeChat'
 import { extractUrl, fetchLinkPreview } from '../utils/linkPreview'
 
-const POLL_INTERVAL = 3000
+const POLL_INTERVAL = 5000
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
 // Memoized so polling re-renders don't remount the video player and cause flickering
-const VideoPreview = React.memo(({ uri, style }) => (
-  <Video
-    source={{ uri }}
-    style={style}
-    controls
-    resizeMode="cover"
-    paused
-  />
+const VideoPreview = React.memo(({ uri, style, onPress }) => (
+  <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+    <Video
+      source={{ uri }}
+      style={style}
+      resizeMode="cover"
+      paused
+    />
+    <View style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: '#fff', fontSize: 18, marginLeft: 3 }}>▶</Text>
+      </View>
+    </View>
+  </TouchableOpacity>
 ))
 
 export default function ChatScreen({ route, navigation }) {
@@ -50,10 +56,9 @@ export default function ChatScreen({ route, navigation }) {
   const [saveRequest, setSaveRequest] = useState(null)
   const dismissedSaveIds = useRef(new Set()) // IDs acted on — never re-show
   const [showAttachMenu, setShowAttachMenu] = useState(false)
-  const [viewOnce, setViewOnce] = useState(false)
-  const [viewOnceOpened, setViewOnceOpened] = useState({}) // messageId -> true
-  const [viewingOnceItem, setViewingOnceItem] = useState(null) // item currently shown full-screen
+
   const [burnPicker, setBurnPicker] = useState(null) // messageId being configured
+  const [fullscreenVideo, setFullscreenVideo] = useState(null)
   const [linkPreview, setLinkPreview] = useState(null)
   const [linkPreviewDismissed, setLinkPreviewDismissed] = useState(false)
   const linkTimer = useRef(null)
@@ -100,16 +105,7 @@ export default function ChatScreen({ route, navigation }) {
     RNFS.exists(AVATAR_PATH).then(exists => {
       if (exists) setMyAvatar(`file://${AVATAR_PATH}?t=${Date.now()}`)
     })
-    // Load local cache instantly, then fetch fresh from server
-    AsyncStorage.getItem(CACHE_KEY).then(cached => {
-      if (cached) {
-        const msgs = JSON.parse(cached)
-        setMessages(msgs)
-        setTimeout(() => {
-          listRef.current?.scrollToEnd({ animated: false })
-        }, 150)
-      }
-    }).catch(() => {})
+    // Fetch from server first — only fall back to cache if the network call fails
     api.get(`/users/${recipientUsername}`)
       .then(({ publicKey, avatar }) => {
         if (publicKey) recipientPublicKeyRef.current = publicKey
@@ -117,6 +113,15 @@ export default function ChatScreen({ route, navigation }) {
       })
       .catch(() => {})
       .then(() => loadHistory())
+      .catch(() => {
+        // Network failed — show stale cache so the screen isn't blank
+        AsyncStorage.getItem(CACHE_KEY).then(cached => {
+          if (!cached) return
+          const msgs = JSON.parse(cached)
+          setMessages(msgs)
+          setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 150)
+        }).catch(() => {})
+      })
       .finally(() => pollInbox())
     api.get(`/messages/requests/${recipientUsername}/status`)
       .then(({ requested: r }) => setRequested(!!r))
@@ -134,7 +139,7 @@ export default function ChatScreen({ route, navigation }) {
     const senderTimer   = setInterval(pollSaveRequests, POLL_INTERVAL)
     const receiptTimer  = setInterval(pollReadReceipts, POLL_INTERVAL)
     const reactionTimer = setInterval(pollReactions, POLL_INTERVAL)
-    const statusTimer   = setInterval(pollStatus, 2000)
+    const statusTimer   = setInterval(pollStatus, 8000)
     pollStatus()
     return () => {
       clearInterval(inboxTimer); clearInterval(senderTimer)
@@ -148,7 +153,13 @@ export default function ChatScreen({ route, navigation }) {
   const pollStatus = useCallback(async () => {
     try {
       const status = await api.get(`/users/status/${recipientUsername}`)
-      setRecipientStatus(status)
+      // Only trigger re-render when something actually changed
+      setRecipientStatus(prev => {
+        if (prev?.isOnline === status?.isOnline &&
+            prev?.lastSeen === status?.lastSeen &&
+            prev?.isTyping === status?.isTyping) return prev
+        return status
+      })
     } catch {}
   }, [recipientUsername])
 
@@ -306,13 +317,19 @@ export default function ChatScreen({ route, navigation }) {
   }, [])
 
   const loadHistory = useCallback(async () => {
+    // No try/catch here — errors propagate to the caller which falls back to cache
+    const myUser = await AsyncStorage.getItem('username')
+    const [{ messages: history }, receipts] = await Promise.all([
+      api.get(`/messages/history/${recipientUsername}`),
+      api.get(`/messages/read-receipts/${recipientUsername}`).catch(() => ({ readIds: [] })),
+    ])
+    if (!history.length) {
+      // Server has no messages — wipe stale local cache (other user may have deleted the conversation)
+      setMessages([])
+      AsyncStorage.removeItem(CACHE_KEY).catch(() => {})
+      return
+    }
     try {
-      const myUser = await AsyncStorage.getItem('username')
-      const [{ messages: history }, receipts] = await Promise.all([
-        api.get(`/messages/history/${recipientUsername}`),
-        api.get(`/messages/read-receipts/${recipientUsername}`).catch(() => ({ readIds: [] })),
-      ])
-      if (!history.length) return
       const readSet = new Set(receipts?.readIds ?? [])
       const decoded = await Promise.all(history.map(async (m) => {
         // Postgres lowercases unquoted aliases: senderUsername → senderusername
@@ -326,14 +343,6 @@ export default function ChatScreen({ route, navigation }) {
           const status = readSet.has(m.id) ? 'read' : 'delivered'
           const extras = await decodeExtras(m)
           return { id: m.id, from: sender, payload, contentType, label, mine: true, status, createdAt: m.created_at, ...extras }
-        }
-        // Check for pre-decrypted view-once file (fetched during push notification)
-        if (m.view_once && !m.viewed_at && (m.content_type === 'image' || m.content_type === 'video')) {
-          const prefetched = await AsyncStorage.getItem(`blink_vo_${m.id}`)
-          if (prefetched) {
-            const extras = await decodeExtras(m)
-            return { id: m.id, from: sender, payload: prefetched, contentType: m.content_type, mine: false, status: 'delivered', createdAt: m.created_at, view_once: true, viewed_at: null, ...extras }
-          }
         }
         try {
           let keyToUse = recipientPublicKeyRef.current
@@ -358,9 +367,9 @@ export default function ChatScreen({ route, navigation }) {
             if (uri) payload = uri
           }
           const extras = await decodeExtras(m)
-          return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at, view_once: m.view_once, viewed_at: m.viewed_at, ...extras }
+          return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at, view_once: false, ...extras }
         } catch (e) {
-          return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at, view_once: m.view_once, viewed_at: m.viewed_at }
+          return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at, view_once: false }
         }
       }))
       setMessages(prev => {
@@ -372,7 +381,9 @@ export default function ChatScreen({ route, navigation }) {
         return merged
       })
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 100)
-    } catch {}
+    } catch (e) {
+      throw e  // re-throw so caller's .catch() can show cache fallback
+    }
   }, [recipientUsername, saveCache, decodeExtras])
 
   const pollInbox = useCallback(async () => {
@@ -384,14 +395,6 @@ export default function ChatScreen({ route, navigation }) {
       const decrypted = await Promise.all(
         incoming.map(async (m) => {
           const sender = m.senderusername ?? m.senderUsername ?? ''
-          // Check for pre-decrypted view-once file (fetched during push notification)
-          if (m.view_once && !m.viewed_at && (m.content_type === 'image' || m.content_type === 'video')) {
-            const prefetched = await AsyncStorage.getItem(`blink_vo_${m.id}`)
-            if (prefetched) {
-              const extras = await decodeExtras(m)
-              return { id: m.id, from: sender, payload: prefetched, contentType: m.content_type, mine: false, status: 'delivered', createdAt: m.created_at, view_once: true, viewed_at: null, ...extras }
-            }
-          }
           try {
             let keyToUse = recipientPublicKeyRef.current
             let payload
@@ -414,9 +417,9 @@ export default function ChatScreen({ route, navigation }) {
               if (uri) payload = uri
             }
             const extras = await decodeExtras(m)
-            return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at, view_once: m.view_once, viewed_at: m.viewed_at, ...extras }
+            return { id: m.id, from: sender, payload, contentType: ct, mine: false, status: 'delivered', createdAt: m.created_at, view_once: false, ...extras }
           } catch (e) {
-            return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at, view_once: m.view_once, viewed_at: m.viewed_at }
+            return { id: m.id, from: sender, payload: '🔒 Encrypted with an older key', contentType: 'text', mine: false, status: 'delivered', createdAt: m.created_at, view_once: false }
           }
         })
       )
@@ -432,7 +435,7 @@ export default function ChatScreen({ route, navigation }) {
     } catch {}
   }, [recipientPublicKey])
 
-  async function sendPayload(payload, contentType, label, replyTo = null, isViewOnce = false) {
+  async function sendPayload(payload, contentType, label, replyTo = null) {
     setRequested(false) // sending implicitly accepts the contact, mirrors backend behavior
     // Add a temporary message immediately so it appears without waiting for the server
     const tempId = `temp_${Date.now()}`
@@ -459,22 +462,17 @@ export default function ChatScreen({ route, navigation }) {
         const { ciphertext: rc, nonce: rn } = await encryptForRecipient(replyTo.snippet, recipientPublicKeyRef.current)
         replyFields = { replyToId: replyTo.id, replyPreviewCiphertext: rc, replyPreviewNonce: rn, replySender: replyTo.sender }
       }
-      const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType, viewOnce: isViewOnce, ...replyFields })
+      const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType, ...replyFields })
       const id = messageId ?? tempId
 
-      // Rename local media file to final id
-      if (contentType === 'image' || contentType === 'video' || contentType === 'audio') {
-        const ext = contentType === 'image' ? 'jpg' : 'mp4'
-        const finalUri = await saveMediaFile(id, payload, ext)
-        if (finalUri) displayPayload = finalUri
-      }
-
+      // Keep the temp file as-is — store its URI in the cache so history loads find it.
+      // No rename/move so the Video source never changes and doesn't flicker.
       AsyncStorage.setItem(`blink_sent_${id}`, JSON.stringify({ payload: displayPayload, contentType, label })).catch(() => {})
 
-      // Replace temp message with confirmed one
+      // Replace temp message with confirmed one — keep payload URI unchanged to avoid video remount
       setMessages(prev => {
         const next = prev.map(m => m.id === tempId
-          ? { ...m, id, payload: displayPayload, status: 'sent' }
+          ? { ...m, id, status: 'sent' }
           : m
         )
         saveCache(next)
@@ -609,8 +607,7 @@ export default function ChatScreen({ route, navigation }) {
     await new Promise(r => setTimeout(r, 500))
     const asset = result.assets[0]
     const base64 = asset.base64 ?? await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
-    const vo = viewOnce; setViewOnce(false)
-    await sendPayload(base64, 'image', asset.fileName ?? 'photo', null, vo)
+    await sendPayload(base64, 'image', asset.fileName ?? 'photo')
   }
 
   async function pickPhoto() {
@@ -621,8 +618,7 @@ export default function ChatScreen({ route, navigation }) {
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
     const base64 = asset.base64 ?? await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
-    const vo = viewOnce; setViewOnce(false)
-    await sendPayload(base64, 'image', asset.fileName, null, vo)
+    await sendPayload(base64, 'image', asset.fileName)
   }
 
   async function pickVideo() {
@@ -640,8 +636,7 @@ export default function ChatScreen({ route, navigation }) {
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
     const base64 = await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
-    const vo = viewOnce; setViewOnce(false)
-    await sendPayload(base64, 'video', asset.fileName ?? 'video', null, vo)
+    await sendPayload(base64, 'video', asset.fileName ?? 'video')
   }
 
   async function pickDocument() {
@@ -654,8 +649,7 @@ export default function ChatScreen({ route, navigation }) {
       const base64 = await RNFS.readFile(uri, 'base64')
       const mime = result.type ?? ''
       const contentType = mime.startsWith('image/') ? 'image' : mime.startsWith('video/') ? 'video' : 'document'
-      const vo = viewOnce; setViewOnce(false)
-      await sendPayload(base64, contentType, result.name ?? 'file', null, vo)
+      await sendPayload(base64, contentType, result.name ?? 'file')
     } catch (err) {
       pickerGuard.end()
       if (!isCancel(err)) Alert.alert('Error', err.message)
@@ -809,36 +803,6 @@ export default function ChatScreen({ route, navigation }) {
     }
   }
 
-  async function openViewOnce(item) {
-    // Payload is null for unviewed view-once media — fetch ciphertext on demand
-    if (!item.payload && (item.contentType === 'image' || item.contentType === 'video')) {
-      try {
-        const { ciphertext, nonce } = await api.get(`/messages/${item.id}/ciphertext`)
-        let decoded = await decryptFromSender(ciphertext, nonce, recipientPublicKeyRef.current)
-        const ext = item.contentType === 'image' ? 'jpg' : 'mp4'
-        const uri = await saveMediaFile(`vo_${item.id}`, decoded, ext)
-        item = { ...item, payload: uri ?? decoded }
-      } catch (e) {
-        Alert.alert('Error', 'Could not load media: ' + e.message)
-        return
-      }
-    }
-    setViewingOnceItem(item)
-  }
-
-  async function closeViewOnce() {
-    const item = viewingOnceItem
-    setViewingOnceItem(null)
-    if (!item) return
-    setViewOnceOpened(prev => ({ ...prev, [item.id]: true }))
-    AsyncStorage.removeItem(`blink_vo_${item.id}`).catch(() => {})
-    try { await api.post(`/messages/${item.id}/viewed`, {}) } catch {}
-    setMessages(prev => {
-      const next = prev.map(m => m.id === item.id ? { ...m, viewed_at: new Date().toISOString() } : m)
-      saveCache(next)
-      return next
-    })
-  }
 
   function renderBubble(item) {
     const isImage = item.contentType === 'image'
@@ -847,39 +811,6 @@ export default function ChatScreen({ route, navigation }) {
     const isAudio = item.contentType === 'audio'
     const canSave = !item.mine && (isImage || isVideo || isDoc)
 
-    // View-once: show tap-to-view placeholder if not yet opened
-    const isViewOnce = item.view_once
-    const alreadyViewed = isViewOnce && (item.viewed_at || viewOnceOpened[item.id])
-    if (isViewOnce && !item.mine && (isImage || isVideo)) {
-      if (alreadyViewed) {
-        return (
-          <View key={item.id} style={[item.mine ? styles.mineOuter : styles.theirsOuter, { marginVertical: 4 }]}>
-            <View style={[styles.bubbleWrap, item.mine ? styles.mineWrap : styles.theirsWrap]}>
-              <View style={[styles.bubble, item.mine ? styles.mine : styles.theirs]}>
-                <Text style={styles.viewOnceOpened}>👁 Opened</Text>
-              </View>
-            </View>
-          </View>
-        )
-      }
-      if (!viewOnceOpened[item.id]) {
-        return (
-          <View key={item.id} style={[styles.theirsOuter, { marginVertical: 4 }]}>
-            <View style={[styles.bubbleWrap, styles.theirsWrap]}>
-              <TouchableOpacity
-                style={[styles.bubble, styles.theirs, styles.viewOnceBubble]}
-                onPress={() => openViewOnce(item)}
-              >
-                <Text style={styles.viewOnceIcon}>🔥</Text>
-                <Text style={styles.viewOnceLabel}>
-                  {isImage ? 'Photo' : 'Video'} — tap to view once
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )
-      }
-    }
 
     const bubble = (
       <View style={item.mine ? styles.mineOuter : styles.theirsOuter}>
@@ -920,6 +851,7 @@ export default function ChatScreen({ route, navigation }) {
               <VideoPreview
                 uri={item.payload.startsWith('file://') ? item.payload : `file://${item.payload}`}
                 style={styles.videoPreview}
+                onPress={() => setFullscreenVideo(item.payload.startsWith('file://') ? item.payload : `file://${item.payload}`)}
               />
             )}
             {isDoc && (
@@ -1331,18 +1263,6 @@ export default function ChatScreen({ route, navigation }) {
         <Pressable style={styles.menuOverlay} onPress={() => setShowAttachMenu(false)}>
           <View style={styles.menuSheet}>
             <Text style={styles.menuTitle}>Send attachment</Text>
-            <TouchableOpacity
-              style={[styles.menuItem, viewOnce && styles.menuItemActive]}
-              onPress={() => setViewOnce(v => !v)}
-            >
-              <View style={[styles.menuIconWrap, viewOnce && { backgroundColor: '#ff4400' }]}>
-                <Text style={{ fontSize: 18 }}>🔥</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.menuLabel}>View once {viewOnce ? '(ON)' : ''}</Text>
-                <Text style={styles.menuSubLabel}>Recipient can only open once — then it's gone</Text>
-              </View>
-            </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={takePhoto}>
               <View style={styles.menuIconWrap}><Icon name="camera" size={20} color="#fff" /></View>
               <Text style={styles.menuLabel}>Camera</Text>
@@ -1366,26 +1286,14 @@ export default function ChatScreen({ route, navigation }) {
         </Pressable>
       </Modal>
 
-      {/* View-once full-screen viewer */}
-      <Modal visible={!!viewingOnceItem} transparent animationType="fade" onRequestClose={closeViewOnce}>
-        <View style={styles.viewOnceModal}>
-          {viewingOnceItem?.contentType === 'image' && (
-            <Image
-              source={{ uri: viewingOnceItem.payload.startsWith('file://') ? viewingOnceItem.payload : `data:image/jpeg;base64,${viewingOnceItem.payload}` }}
-              style={styles.viewOnceFullImg}
-              resizeMode="contain"
-            />
+
+      <Modal visible={!!fullscreenVideo} transparent animationType="fade" onRequestClose={() => setFullscreenVideo(null)}>
+        <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
+          {fullscreenVideo && (
+            <Video source={{ uri: fullscreenVideo }} style={{ width: '100%', height: '85%' }} controls resizeMode="contain" />
           )}
-          {viewingOnceItem?.contentType === 'video' && (
-            <Video
-              source={{ uri: viewingOnceItem.payload.startsWith('file://') ? viewingOnceItem.payload : `file://${viewingOnceItem.payload}` }}
-              style={styles.viewOnceFullImg}
-              controls
-              resizeMode="contain"
-            />
-          )}
-          <TouchableOpacity style={styles.viewOnceClose} onPress={closeViewOnce}>
-            <Text style={styles.viewOnceCloseText}>✕  Close (view once)</Text>
+          <TouchableOpacity onPress={() => setFullscreenVideo(null)} style={{ marginTop: 16, paddingVertical: 12, paddingHorizontal: 32, backgroundColor: '#1f1f1f', borderRadius: 24 }}>
+            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>✕  Close</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -1498,14 +1406,6 @@ const styles = StyleSheet.create({
   menuLabel:     { color: '#fff', fontSize: 16 },
   menuSubLabel:  { color: '#666', fontSize: 12, marginTop: 2 },
   menuItemActive:{ backgroundColor: '#2a1a00' },
-  viewOnceBubble:{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 },
-  viewOnceIcon:  { fontSize: 22 },
-  viewOnceLabel: { color: '#fff', fontSize: 14, fontWeight: '500' },
-  viewOnceOpened:{ color: '#555', fontSize: 13, fontStyle: 'italic', padding: 8 },
-  viewOnceModal: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
-  viewOnceFullImg: { width: '100%', height: '85%' },
-  viewOnceClose: { marginTop: 20, paddingVertical: 12, paddingHorizontal: 28, backgroundColor: '#1f1f1f', borderRadius: 24 },
-  viewOnceCloseText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   menuCancel:    { paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   menuCancelText:{ color: '#4f6ef7', fontSize: 16 },
   replyQuote:       { borderLeftWidth: 3, borderLeftColor: 'rgba(255,255,255,0.5)', paddingLeft: 8, marginBottom: 6 },

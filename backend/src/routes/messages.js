@@ -470,7 +470,7 @@ export async function messageRoutes(app) {
       )`,
       [req.user.userId, otherId]
     )
-    await pool.query(
+    const { rowCount } = await pool.query(
       `DELETE FROM messages
        WHERE (sender_id = $1 AND recipient_id = $2)
           OR (sender_id = $2 AND recipient_id = $1)`,
@@ -481,7 +481,7 @@ export async function messageRoutes(app) {
       `DELETE FROM accepted_contacts WHERE user_id = $1 AND contact_id = $2`,
       [req.user.userId, otherId]
     )
-    return { ok: true }
+    return { ok: true, deleted: rowCount }
   })
 
   // Recipient requests a time extension on a saved library item
