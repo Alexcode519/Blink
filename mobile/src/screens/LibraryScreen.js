@@ -5,6 +5,8 @@ import {
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { loadIndex, deleteItem, updateExpiresAt } from '../library/storage'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import RNFS from 'react-native-fs'
 import { api } from '../api/client'
 
 const COL = 3
@@ -26,6 +28,33 @@ export default function LibraryScreen({ navigation, route }) {
       else setItems(all)
     })
   }, [fromUsername, fromGroupId]))
+
+  async function clearAll() {
+    const scope = fromUsername ? `all saves from ${fromUsername}` : groupName ? `all saves from ${groupName}` : 'your entire library'
+    Alert.alert('Clear library', `Delete ${scope}? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear', style: 'destructive', onPress: async () => {
+          const index = await loadIndex(false)
+          const toDelete = fromUsername
+            ? index.filter(i => i.fromUsername === fromUsername)
+            : fromGroupId
+            ? index.filter(i => i.fromGroupId === fromGroupId)
+            : index
+          for (const item of toDelete) {
+            try { await RNFS.unlink(item.path) } catch {}
+          }
+          const remaining = fromUsername
+            ? index.filter(i => i.fromUsername !== fromUsername)
+            : fromGroupId
+            ? index.filter(i => i.fromGroupId !== fromGroupId)
+            : []
+          await AsyncStorage.setItem('blink_library_index', JSON.stringify(remaining))
+          setItems([])
+        }
+      },
+    ])
+  }
 
   async function confirmDelete(id) {
     Alert.alert('Delete', 'Remove this from your library?', [
@@ -124,7 +153,12 @@ export default function LibraryScreen({ navigation, route }) {
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.header}>{fromUsername ? `${fromUsername}'s saves` : groupName ? `${groupName}'s saves` : 'Library'}</Text>
-        <View style={{ width: 60 }} />
+        {items.length > 0
+          ? <TouchableOpacity onPress={clearAll} style={{ width: 60, alignItems: 'flex-end' }}>
+              <Text style={styles.clearBtn}>Clear</Text>
+            </TouchableOpacity>
+          : <View style={{ width: 60 }} />
+        }
       </View>
       {items.length === 0 ? (
         <View style={styles.empty}>
@@ -198,4 +232,5 @@ const styles = StyleSheet.create({
   extendBtn:      { color: '#4f6ef7', fontSize: 14, fontWeight: '600' },
   extendBadge:    { marginTop: 4, backgroundColor: '#1a2a4a', borderRadius: 4, paddingVertical: 2, paddingHorizontal: 6 },
   extendBadgeText:{ color: '#4f6ef7', fontSize: 9, fontWeight: '600' },
+  clearBtn:       { color: '#ff4444', fontSize: 14, fontWeight: '600' },
 })
