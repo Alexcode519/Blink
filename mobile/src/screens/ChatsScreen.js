@@ -6,6 +6,7 @@ import messaging from '@react-native-firebase/messaging'
 import Svg, { Path, Line, Circle, Polyline, Rect, G } from 'react-native-svg'
 import RNFS from 'react-native-fs'
 import { api } from '../api/client'
+import { deleteConversationItems, deleteGroupItems } from '../library/storage'
 import ExtendRequestModal from '../components/ExtendRequestModal'
 
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
@@ -175,6 +176,7 @@ export default function ChatsScreen({ navigation }) {
         text: 'Leave', style: 'destructive', onPress: async () => {
           try {
             await api.delete(`/groups/${group.id}/members/me`)
+            await deleteGroupItems(group.id)
             const cachedG = await AsyncStorage.getItem(CACHE_KEY_GROUPS)
             if (cachedG) {
               const updated = JSON.parse(cachedG).filter(g => g.id !== group.id)
@@ -197,8 +199,9 @@ export default function ChatsScreen({ navigation }) {
           try {
             const { deleted } = await api.delete(`/messages/conversation/${username}`)
             deletedConvs.current.add(username)
-            // Clear local message cache and update conversations cache
+            // Clear local message cache, library media, and update conversations cache
             await AsyncStorage.multiRemove([`blink_chat_${username}`])
+            await deleteConversationItems(username)
             const cached = await AsyncStorage.getItem(CACHE_KEY_CONVS)
             if (cached) {
               const parsed = JSON.parse(cached)

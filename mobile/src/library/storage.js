@@ -71,3 +71,27 @@ export async function deleteItem(id) {
   const updated = index.filter(i => i.id !== id)
   await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(updated))
 }
+
+// Delete all library items belonging to a DM conversation
+export async function deleteConversationItems(username) {
+  const index = await loadIndex(false)
+  const toDelete = index.filter(i => i.fromUsername === username)
+  for (const item of toDelete) {
+    try { await RNFS.unlink(item.path) } catch {}
+  }
+  const updated = index.filter(i => i.fromUsername !== username)
+  await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(updated))
+  return toDelete.length
+}
+
+// Delete all library items belonging to a group
+export async function deleteGroupItems(groupId) {
+  const index = await loadIndex(false)
+  const toDelete = index.filter(i => i.fromGroupId === groupId)
+  for (const item of toDelete) {
+    try { await RNFS.unlink(item.path) } catch {}
+  }
+  const updated = index.filter(i => i.fromGroupId !== groupId)
+  await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(updated))
+  return toDelete.length
+}
