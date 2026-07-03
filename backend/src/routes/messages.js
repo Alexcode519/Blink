@@ -497,34 +497,38 @@ export async function messageRoutes(app) {
 
   // Delete all messages between current user and another user (for this user only)
   app.delete('/messages/conversation/:username', async (req, reply) => {
-    const { rows: other } = await pool.query(
-      'SELECT id FROM users WHERE username = $1',
-      [req.params.username.toLowerCase()]
-    )
-    if (!other.length) return reply.code(404).send({ error: 'User not found' })
-    const otherId = other[0].id
+    try {
+      const { rows: other } = await pool.query(
+        'SELECT id FROM users WHERE username = $1',
+        [req.params.username.toLowerCase()]
+      )
+      if (!other.length) return reply.code(404).send({ error: 'User not found' })
+      const otherId = other[0].id
 
-    // Delete save_requests first (FK constraint), then messages
-    await pool.query(
-      `DELETE FROM save_requests WHERE message_id IN (
-        SELECT id FROM messages
-        WHERE (sender_id = $1 AND recipient_id = $2)
-           OR (sender_id = $2 AND recipient_id = $1)
-      )`,
-      [req.user.userId, otherId]
-    )
-    const { rowCount } = await pool.query(
-      `DELETE FROM messages
-       WHERE (sender_id = $1 AND recipient_id = $2)
-          OR (sender_id = $2 AND recipient_id = $1)`,
-      [req.user.userId, otherId]
-    )
-    // Remove from contacts list so they don't reappear via the accepted_contacts UNION
-    await pool.query(
-      `DELETE FROM accepted_contacts WHERE user_id = $1 AND contact_id = $2`,
-      [req.user.userId, otherId]
-    )
-    return { ok: true, deleted: rowCount }
+      // Delete save_requests first (FK constraint), then messages
+      await pool.query(
+        `DELETE FROM save_requests WHERE message_id IN (
+          SELECT id FROM messages
+          WHERE (sender_id = $1 AND recipient_id = $2)
+             OR (sender_id = $2 AND recipient_id = $1)
+        )`,
+        [req.user.userId, otherId]
+      )
+      const { rowCount } = await pool.query(
+        `DELETE FROM messages
+         WHERE (sender_id = $1 AND recipient_id = $2)
+            OR (sender_id = $2 AND recipient_id = $1)`,
+        [req.user.userId, otherId]
+      )
+      await pool.query(
+        `DELETE FROM accepted_contacts WHERE user_id = $1 AND contact_id = $2`,
+        [req.user.userId, otherId]
+      )
+      return { ok: true, deleted: rowCount }
+    } catch (e) {
+      console.error('[delete conversation] error:', e.message)
+      return reply.code(500).send({ error: e.message })
+    }
   })
 
   // Recipient requests a time extension on a saved library item

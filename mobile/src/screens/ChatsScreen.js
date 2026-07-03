@@ -201,24 +201,25 @@ export default function ChatsScreen({ navigation }) {
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
           try {
-            const { deleted } = await api.delete(`/messages/conversation/${username}`)
-            deletedConvs.current.add(username)
-            // Clear local message cache, library media, and update conversations cache
-            await AsyncStorage.multiRemove([`blink_chat_${username}`])
-            await deleteConversationItems(username)
-            const cached = await AsyncStorage.getItem(CACHE_KEY_CONVS)
-            if (cached) {
-              const parsed = JSON.parse(cached)
-              if (Array.isArray(parsed)) {
-                const updated = parsed.filter(c => c.other_username !== username)
-                await AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(updated))
-              }
-            }
-            setConversations(prev => prev.filter(c => c.other_username !== username))
-            Alert.alert('Deleted', `Chat with ${username} deleted. (${deleted ?? 0} messages removed from server)`)
+            await api.delete(`/messages/conversation/${username}`)
           } catch (err) {
             Alert.alert('Error', err.message)
+            return
           }
+          // Server delete succeeded — clean up local state regardless of any local errors
+          deletedConvs.current.add(username)
+          AsyncStorage.removeItem(`blink_chat_${username}`).catch(() => {})
+          deleteConversationItems(username).catch(() => {})
+          AsyncStorage.getItem(CACHE_KEY_CONVS).then(cached => {
+            if (!cached) return
+            const parsed = JSON.parse(cached)
+            if (Array.isArray(parsed)) {
+              const updated = parsed.filter(c => c.other_username !== username)
+              AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(updated)).catch(() => {})
+            }
+          }).catch(() => {})
+          setConversations(prev => prev.filter(c => c.other_username !== username))
+          Alert.alert('Deleted', `Chat with ${username} deleted.`)
         }
       },
     ])
