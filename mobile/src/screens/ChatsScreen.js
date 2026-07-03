@@ -392,8 +392,7 @@ export default function ChatsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {!!debugMsg && <Text style={{ color: '#ff4444', fontSize: 11, textAlign: 'center', padding: 4 }}>{debugMsg}</Text>}
-      {loading ? (
+{loading ? (
         <Text style={styles.hint}>Loading…</Text>
       ) : conversations.length === 0 && groups.length === 0 ? (
         <Text style={styles.hint}>No conversations yet — start one above</Text>
