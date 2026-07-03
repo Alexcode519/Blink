@@ -47,6 +47,7 @@ export default function ChatScreen({ route, navigation }) {
   const { recipientUsername, recipientPublicKey } = route.params
   const [requested, setRequested] = useState(false)
   const [verified, setVerified] = useState(false)
+  const [isBlocked, setIsBlocked] = useState(false)
   const [messages, setMessages] = useState([])
   const { fontSize } = useFontSize()
   const [text, setText] = useState('')
@@ -129,6 +130,9 @@ export default function ChatScreen({ route, navigation }) {
     api.get(`/invites/verified/${recipientUsername}`)
       .then(({ verified: v }) => setVerified(!!v))
       .catch(() => {})
+    api.get('/users/blocked')
+      .then(({ blocked }) => setIsBlocked(blocked.includes(recipientUsername.toLowerCase())))
+      .catch(() => {})
     // Mark incoming messages as read and dismiss notification
     api.post(`/messages/read/${recipientUsername}`, {}).catch(() => {})
     notifee.cancelNotification(notifIdForSender(recipientUsername)).catch(() => {})
@@ -186,6 +190,30 @@ export default function ChatScreen({ route, navigation }) {
       setRequested(false)
     } catch (e) {
       Alert.alert('Error', e.message)
+    }
+  }
+
+  function toggleBlock() {
+    if (isBlocked) {
+      Alert.alert('Unblock', `Allow ${recipientUsername} to send you messages again?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Unblock', onPress: async () => {
+          try {
+            await api.delete(`/users/block/${recipientUsername}`)
+            setIsBlocked(false)
+          } catch (e) { Alert.alert('Error', e.message) }
+        }},
+      ])
+    } else {
+      Alert.alert('Block', `Block ${recipientUsername}? They won't be able to message you.`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Block', style: 'destructive', onPress: async () => {
+          try {
+            await api.post(`/users/block/${recipientUsername}`)
+            setIsBlocked(true)
+          } catch (e) { Alert.alert('Error', e.message) }
+        }},
+      ])
     }
   }
 
@@ -1104,6 +1132,9 @@ export default function ChatScreen({ route, navigation }) {
             onPress={() => navigation.navigate('SafetyNumber', { recipientUsername, recipientPublicKey: recipientPublicKeyRef.current })}
           >
             <Icon name="shield" size={20} color="#888" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={toggleBlock}>
+            <Icon name={isBlocked ? 'slash' : 'user-x'} size={20} color={isBlocked ? '#ff4444' : '#888'} />
           </TouchableOpacity>
         </View>
       </View>
