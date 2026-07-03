@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { api } from '../api/client'
 import { getActiveChat } from './activeChat'
 
-// High-importance channel WITH sound — used by the background/killed handler
+// Audible channel — used when the app is in background/killed
 async function ensureChannel() {
   await notifee.createChannel({
     id: 'blink_messages',
@@ -14,15 +14,27 @@ async function ensureChannel() {
   })
 }
 
-// Silent channel — heads-up popup but NO sound, used when the app is in foreground
+// Truly silent channel (LOW = no sound, no vibration) — used when app is in foreground
 async function ensureSilentChannel() {
   await notifee.createChannel({
     id: 'blink_messages_silent',
     name: 'Messages (in-app)',
-    importance: AndroidImportance.DEFAULT,
+    importance: AndroidImportance.LOW,
     vibration: false,
-    sound: 'null', // explicit null sound string silences the channel on most devices
   })
+}
+
+// Returns true if this device should suppress this notification
+async function shouldSuppress(data) {
+  const myUsername        = await AsyncStorage.getItem('username')
+  const intendedRecipient = (data.recipientUsername ?? '').toLowerCase()
+  const sender            = (data.senderUsername ?? '').toLowerCase()
+  const me                = (myUsername ?? '').toLowerCase()
+  // If we know who this is for and it's not us → suppress
+  if (intendedRecipient && me && intendedRecipient !== me) return true
+  // Belt-and-suspenders: if sender is ourselves → suppress
+  if (sender && me && sender === me) return true
+  return false
 }
 
 // Notification ID per sender so opening a chat can cancel it
@@ -34,6 +46,7 @@ export function notifIdForGroup(groupId) {
   return `group_${groupId}`
 }
 
+// Called from foreground onMessage — shows silently (app is already open)
 export async function displayMessageNotification(remoteMessage) {
   try {
     await ensureSilentChannel()
@@ -44,19 +57,11 @@ export async function displayMessageNotification(remoteMessage) {
     const sender  = data.senderUsername ?? ''
     const groupId = data.groupId ?? ''
 
-    // Only show foreground banners for actual chat messages — save/extend requests
-    // are handled by in-chat polling modals, so a tappable banner would just confuse navigation
     const isChatMessage = data.type === 'new_group_message' || !!data.senderUsername
     if (!isChatMessage) return
+    if (await shouldSuppress(data)) return
 
-    // Only show notification if this device is the intended recipient
-    const myUsername = await AsyncStorage.getItem('username')
-    const intendedRecipient = data.recipientUsername ?? ''
-    if (intendedRecipient && myUsername && intendedRecipient.toLowerCase() !== myUsername.toLowerCase()) return
-    // Also suppress if sender is myself (belt-and-suspenders for group notifications)
-    if (sender && myUsername && sender.toLowerCase() === myUsername.toLowerCase()) return
-
-    // Skip the popup if the user is already looking at that conversation
+    // Skip if user is already looking at that conversation
     const activeKey = isGroup ? `group:${groupId}` : sender
     if (activeKey && activeKey === getActiveChat()) return
 
@@ -67,12 +72,43 @@ export async function displayMessageNotification(remoteMessage) {
       data,
       android: {
         channelId: 'blink_messages_silent',
-        importance: AndroidImportance.DEFAULT,
+        importance: AndroidImportance.LOW,
         pressAction: { id: 'default' },
       },
     })
   } catch (e) {
     console.warn('displayMessageNotification error:', e.message)
+  }
+}
+
+// Called from background/quit handler — shows with sound (app is not visible)
+export async function displayBackgroundNotification(remoteMessage) {
+  try {
+    await ensureChannel()
+    const data    = remoteMessage.data ?? {}
+    const title   = data.title ?? remoteMessage.notification?.title ?? 'Blink'
+    const body    = data.body  ?? remoteMessage.notification?.body  ?? 'New message'
+    const isGroup = data.type === 'new_group_message'
+    const sender  = data.senderUsername ?? ''
+    const groupId = data.groupId ?? ''
+
+    const isChatMessage = data.type === 'new_group_message' || !!data.senderUsername
+    if (!isChatMessage) return
+    if (await shouldSuppress(data)) return
+
+    await notifee.displayNotification({
+      id: isGroup ? notifIdForGroup(groupId) : notifIdForSender(sender),
+      title,
+      body,
+      data,
+      android: {
+        channelId: 'blink_messages',
+        importance: AndroidImportance.HIGH,
+        pressAction: { id: 'default' },
+      },
+    })
+  } catch (e) {
+    console.warn('displayBackgroundNotification error:', e.message)
   }
 }
 
@@ -99,7 +135,7 @@ export async function setupPushNotifications() {
       try { await api.post('/users/fcm-token', { fcmToken: t }) } catch {}
     })
 
-    // Foreground messages — shown silently (sound plays only when app is backgrounded)
+    // Foreground messages — silent (app is already open)
     messaging().onMessage(async (remoteMessage) => {
       await displayMessageNotification(remoteMessage)
     })

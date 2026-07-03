@@ -7,11 +7,11 @@ import { AppRegistry } from 'react-native';
 import App from './App';
 import { name as appName } from './app.json';
 import messaging from '@react-native-firebase/messaging';
-import { displayMessageNotification } from './src/notifications/setup';
+import { displayBackgroundNotification } from './src/notifications/setup';
 
-// Background/quit state data-only message handler
+// Background/quit state data-only message handler — plays sound, checks recipient
 messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-  await displayMessageNotification(remoteMessage);
+  await displayBackgroundNotification(remoteMessage);
 });
 
 AppRegistry.registerComponent(appName, () => App);
