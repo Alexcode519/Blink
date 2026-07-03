@@ -121,7 +121,7 @@ export async function messageRoutes(app) {
          FROM accepted_contacts ac
          JOIN users u2 ON u2.id = ac.contact_id
          WHERE ac.user_id = $1
-           AND NOT EXISTS (SELECT 1 FROM messaged WHERE other_user = ac.contact_id)
+           AND NOT EXISTS (SELECT 1 FROM messaged mg WHERE mg.other_user = ac.contact_id)
          ORDER BY last_at DESC`,
         [req.user.userId]
       )
