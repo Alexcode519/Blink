@@ -71,14 +71,20 @@ export default function ChatsScreen({ navigation }) {
       .then(({ conversations: c }) => {
         const filtered = c.filter(conv => {
           if (!deletedConvs.current.has(conv.other_username)) return true
-          // Deleted user reappeared — they must have sent new messages; unblock and show them
+          // Deleted user reappeared — they sent new messages; unblock and show them
           deletedConvs.current.delete(conv.other_username)
           return true
         })
         setConversations(filtered)
-          AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(filtered)).catch(() => {})
+        // Server count is now authoritative — clear local increments for these users
+        setLocalUnread(prev => {
+          const next = { ...prev }
+          for (const conv of filtered) delete next[conv.other_username]
+          return next
+        })
+        AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(filtered)).catch(() => {})
       })
-      .catch((err) => { setDebugMsg('ERR: ' + (err?.message ?? 'unknown')) })
+      .catch(() => {})
       .finally(() => setLoading(false))
   }
 

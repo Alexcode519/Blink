@@ -8,9 +8,11 @@ export function registerBackgroundHandler() {
     const title = data.title ?? remoteMessage.notification?.title ?? 'Blink'
     const body  = data.body  ?? remoteMessage.notification?.body  ?? 'New message'
 
-    // Never play a notification for a message you sent yourself
-    const sender     = data.senderUsername ?? ''
-    const myUsername = await AsyncStorage.getItem('username')
+    // Only notify if this device is the intended recipient
+    const myUsername        = await AsyncStorage.getItem('username')
+    const intendedRecipient = data.recipientUsername ?? ''
+    if (intendedRecipient && myUsername && intendedRecipient.toLowerCase() !== myUsername.toLowerCase()) return
+    const sender = data.senderUsername ?? ''
     if (sender && myUsername && sender.toLowerCase() === myUsername.toLowerCase()) return
 
     await notifee.createChannel({ id: 'blink_messages', name: 'Messages', importance: AndroidImportance.HIGH })

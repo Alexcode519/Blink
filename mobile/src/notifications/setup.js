@@ -49,8 +49,11 @@ export async function displayMessageNotification(remoteMessage) {
     const isChatMessage = data.type === 'new_group_message' || !!data.senderUsername
     if (!isChatMessage) return
 
-    // Never notify for messages you sent yourself
+    // Only show notification if this device is the intended recipient
     const myUsername = await AsyncStorage.getItem('username')
+    const intendedRecipient = data.recipientUsername ?? ''
+    if (intendedRecipient && myUsername && intendedRecipient.toLowerCase() !== myUsername.toLowerCase()) return
+    // Also suppress if sender is myself (belt-and-suspenders for group notifications)
     if (sender && myUsername && sender.toLowerCase() === myUsername.toLowerCase()) return
 
     // Skip the popup if the user is already looking at that conversation
