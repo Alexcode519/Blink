@@ -60,6 +60,7 @@ export default function ChatsScreen({ navigation }) {
   const [pendingInvites, setPendingInvites] = useState([])
   const isFocused = useRef(false)
   const [localUnread, setLocalUnread] = useState({}) // username -> count, incremented on FCM arrival
+  const [debugMsg, setDebugMsg] = useState('')
   const deletedConvs = useRef(new Set()) // usernames deleted this session — cleared when they reappear with new messages
 
   const CACHE_KEY_CONVS   = 'blink_cache_conversations'
@@ -75,9 +76,10 @@ export default function ChatsScreen({ navigation }) {
           return true
         })
         setConversations(filtered)
+        setDebugMsg(`OK: ${filtered.length} convs (raw: ${c.length})`)
         AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(filtered)).catch(() => {})
       })
-      .catch(() => {})
+      .catch((err) => { setDebugMsg('ERR: ' + (err?.message ?? 'unknown')) })
       .finally(() => setLoading(false))
   }
 
@@ -199,8 +201,11 @@ export default function ChatsScreen({ navigation }) {
             await AsyncStorage.multiRemove([`blink_chat_${username}`])
             const cached = await AsyncStorage.getItem(CACHE_KEY_CONVS)
             if (cached) {
-              const updated = JSON.parse(cached).filter(c => c.other_username !== username)
-              await AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(updated))
+              const parsed = JSON.parse(cached)
+              if (Array.isArray(parsed)) {
+                const updated = parsed.filter(c => c.other_username !== username)
+                await AsyncStorage.setItem(CACHE_KEY_CONVS, JSON.stringify(updated))
+              }
             }
             setConversations(prev => prev.filter(c => c.other_username !== username))
             Alert.alert('Deleted', `Chat with ${username} deleted. (${deleted ?? 0} messages removed from server)`)
@@ -253,7 +258,7 @@ export default function ChatsScreen({ navigation }) {
         >
           {item.other_avatar
             ? <Image source={{ uri: `data:image/jpeg;base64,${item.other_avatar}` }} style={styles.avatarImg} />
-            : <View style={styles.avatar}><Text style={styles.avatarText}>{u[0].toUpperCase()}</Text></View>
+            : <View style={styles.avatar}><Text style={styles.avatarText}>{(u || '?')[0].toUpperCase()}</Text></View>
           }
           <Text style={styles.username}>{u}</Text>
           {item.requested && (
@@ -386,6 +391,7 @@ export default function ChatsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
+      {!!debugMsg && <Text style={{ color: '#ff4444', fontSize: 11, textAlign: 'center', padding: 4 }}>{debugMsg}</Text>}
       {loading ? (
         <Text style={styles.hint}>Loading…</Text>
       ) : conversations.length === 0 && groups.length === 0 ? (

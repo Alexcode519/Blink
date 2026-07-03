@@ -1,5 +1,6 @@
 import messaging from '@react-native-firebase/messaging'
 import notifee, { AndroidImportance } from '@notifee/react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { api } from '../api/client'
 import { getActiveChat } from './activeChat'
 
@@ -35,6 +36,10 @@ export async function displayMessageNotification(remoteMessage) {
     // are handled by in-chat polling modals, so a tappable banner would just confuse navigation
     const isChatMessage = data.type === 'new_group_message' || !!data.senderUsername
     if (!isChatMessage) return
+
+    // Never notify for messages you sent yourself
+    const myUsername = await AsyncStorage.getItem('username')
+    if (sender && myUsername && sender === myUsername) return
 
     // Skip the popup if the user is already looking at that conversation
     const activeKey = isGroup ? `group:${groupId}` : sender
