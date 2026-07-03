@@ -78,56 +78,92 @@ export async function messageRoutes(app) {
   // Get recent conversations (distinct users this user has chatted with)
   app.get('/messages/conversations', async (req, reply) => {
     try {
-      const { rows } = await pool.query(
-        `WITH unread AS (
-           SELECT sender_id AS other_user, COUNT(*)::int AS cnt
-           FROM messages
-           WHERE recipient_id = $1 AND read_at IS NULL
-           GROUP BY sender_id
-         ),
-         contacts AS (
-           SELECT contact_id FROM accepted_contacts WHERE user_id = $1
-         ),
-         messaged AS (
-           SELECT DISTINCT CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS other_user
-           FROM messages WHERE sender_id = $1 OR recipient_id = $1
-         )
-         SELECT * FROM (
-           SELECT DISTINCT ON (other_user)
-             other_user, other_username, other_public_key, other_avatar, last_at,
-             COALESCE(u.cnt, 0) AS unread_count,
-             (c.contact_id IS NULL) AS requested
-           FROM (
-             SELECT
-               CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END AS other_user,
-               CASE WHEN m.sender_id = $1 THEN ru.username ELSE su.username END AS other_username,
-               CASE WHEN m.sender_id = $1 THEN ru.public_key ELSE su.public_key END AS other_public_key,
-               CASE WHEN m.sender_id = $1 THEN ru.avatar ELSE su.avatar END AS other_avatar,
-               m.created_at AS last_at
-             FROM messages m
-             JOIN users su ON su.id = m.sender_id
-             JOIN users ru ON ru.id = m.recipient_id
-             WHERE m.sender_id = $1 OR m.recipient_id = $1
-           ) t
-           LEFT JOIN unread u ON u.other_user = t.other_user
-           LEFT JOIN contacts c ON c.contact_id = t.other_user
-           ORDER BY other_user, last_at DESC
-         ) convs
-         UNION
-         SELECT
-           u2.id AS other_user, u2.username AS other_username,
-           u2.public_key AS other_public_key, u2.avatar AS other_avatar,
-           ac.created_at AS last_at, 0 AS unread_count, false AS requested
+      const uid = req.user.userId
+
+      // Query 1: users this person has exchanged messages with
+      const { rows: msgRows } = await pool.query(
+        `SELECT DISTINCT ON (other_user)
+           CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END AS other_user,
+           CASE WHEN m.sender_id = $1 THEN ru.username ELSE su.username END AS other_username,
+           CASE WHEN m.sender_id = $1 THEN ru.public_key ELSE su.public_key END AS other_public_key,
+           CASE WHEN m.sender_id = $1 THEN ru.avatar ELSE su.avatar END AS other_avatar,
+           m.created_at AS last_at
+         FROM messages m
+         JOIN users su ON su.id = m.sender_id
+         JOIN users ru ON ru.id = m.recipient_id
+         WHERE m.sender_id = $1 OR m.recipient_id = $1
+         ORDER BY other_user, m.created_at DESC`,
+        [uid]
+      )
+
+      // Query 2: unread counts per sender
+      const { rows: unreadRows } = await pool.query(
+        `SELECT sender_id AS other_user, COUNT(*)::int AS cnt
+         FROM messages
+         WHERE recipient_id = $1 AND read_at IS NULL
+         GROUP BY sender_id`,
+        [uid]
+      )
+      const unreadMap = {}
+      for (const r of unreadRows) unreadMap[r.other_user] = r.cnt
+
+      // Query 3: accepted contacts (to mark requested=false and include contacts with no messages)
+      const { rows: contactRows } = await pool.query(
+        `SELECT ac.contact_id, u2.username, u2.public_key, u2.avatar, ac.created_at
          FROM accepted_contacts ac
          JOIN users u2 ON u2.id = ac.contact_id
-         WHERE ac.user_id = $1
-           AND NOT EXISTS (SELECT 1 FROM messaged mg WHERE mg.other_user = ac.contact_id)
-         ORDER BY last_at DESC`,
-        [req.user.userId]
+         WHERE ac.user_id = $1`,
+        [uid]
       )
-      return { conversations: rows }
+      const contactSet = new Set(contactRows.map(r => r.contact_id))
+
+      // Query 4: check if requester (message sender who isn't a contact) has pending request
+      const { rows: reqRows } = await pool.query(
+        `SELECT DISTINCT sender_id FROM messages
+         WHERE recipient_id = $1
+           AND sender_id NOT IN (
+             SELECT contact_id FROM accepted_contacts WHERE user_id = $1
+           )`,
+        [uid]
+      )
+      const requestedSet = new Set(reqRows.map(r => r.sender_id))
+
+      // Build conversation list from messages
+      const messagedIds = new Set()
+      const conversations = msgRows.map(row => {
+        messagedIds.add(row.other_user)
+        return {
+          other_user: row.other_user,
+          other_username: row.other_username,
+          other_public_key: row.other_public_key,
+          other_avatar: row.other_avatar,
+          last_at: row.last_at,
+          unread_count: unreadMap[row.other_user] ?? 0,
+          requested: requestedSet.has(row.other_user),
+        }
+      })
+
+      // Add accepted contacts with no messages
+      for (const c of contactRows) {
+        if (!messagedIds.has(c.contact_id)) {
+          conversations.push({
+            other_user: c.contact_id,
+            other_username: c.username,
+            other_public_key: c.public_key,
+            other_avatar: c.avatar,
+            last_at: c.created_at,
+            unread_count: 0,
+            requested: false,
+          })
+        }
+      }
+
+      // Sort by most recent first
+      conversations.sort((a, b) => new Date(b.last_at) - new Date(a.last_at))
+
+      return { conversations }
     } catch (e) {
-      console.error('[conversations] SQL error:', e.message, '| userId:', req.user.userId)
+      console.error('[conversations] error:', e.message, '| userId:', req.user.userId)
       return reply.code(500).send({ error: e.message })
     }
   })
