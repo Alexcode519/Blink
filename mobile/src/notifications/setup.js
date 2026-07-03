@@ -4,12 +4,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { api } from '../api/client'
 import { getActiveChat } from './activeChat'
 
+// High-importance channel WITH sound — used by the background/killed handler
 async function ensureChannel() {
   await notifee.createChannel({
     id: 'blink_messages',
     name: 'Messages',
     importance: AndroidImportance.HIGH,
     vibration: true,
+  })
+}
+
+// Silent channel — heads-up popup but NO sound, used when the app is in foreground
+async function ensureSilentChannel() {
+  await notifee.createChannel({
+    id: 'blink_messages_silent',
+    name: 'Messages (in-app)',
+    importance: AndroidImportance.DEFAULT,
+    vibration: false,
+    sound: 'null', // explicit null sound string silences the channel on most devices
   })
 }
 
@@ -24,7 +36,7 @@ export function notifIdForGroup(groupId) {
 
 export async function displayMessageNotification(remoteMessage) {
   try {
-    await ensureChannel()
+    await ensureSilentChannel()
     const data    = remoteMessage.data ?? {}
     const title   = data.title ?? 'Blink'
     const body    = data.body  ?? 'New message'
@@ -39,7 +51,7 @@ export async function displayMessageNotification(remoteMessage) {
 
     // Never notify for messages you sent yourself
     const myUsername = await AsyncStorage.getItem('username')
-    if (sender && myUsername && sender === myUsername) return
+    if (sender && myUsername && sender.toLowerCase() === myUsername.toLowerCase()) return
 
     // Skip the popup if the user is already looking at that conversation
     const activeKey = isGroup ? `group:${groupId}` : sender
@@ -51,8 +63,8 @@ export async function displayMessageNotification(remoteMessage) {
       body,
       data,
       android: {
-        channelId: 'blink_messages',
-        importance: AndroidImportance.HIGH,
+        channelId: 'blink_messages_silent',
+        importance: AndroidImportance.DEFAULT,
         pressAction: { id: 'default' },
       },
     })
@@ -64,6 +76,7 @@ export async function displayMessageNotification(remoteMessage) {
 export async function setupPushNotifications() {
   try {
     await ensureChannel()
+    await ensureSilentChannel()
     await notifee.requestPermission()
     const authStatus = await messaging().requestPermission()
     const enabled =
@@ -83,7 +96,7 @@ export async function setupPushNotifications() {
       try { await api.post('/users/fcm-token', { fcmToken: t }) } catch {}
     })
 
-    // Foreground messages
+    // Foreground messages — shown silently (sound plays only when app is backgrounded)
     messaging().onMessage(async (remoteMessage) => {
       await displayMessageNotification(remoteMessage)
     })

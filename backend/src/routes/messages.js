@@ -46,7 +46,7 @@ export async function messageRoutes(app) {
     )
     if (blockCheck.length) return reply.code(403).send({ error: 'Message could not be delivered' })
     const { rows: senders } = await pool.query(
-      'SELECT username FROM users WHERE id = $1',
+      'SELECT username, fcm_token FROM users WHERE id = $1',
       [req.user.userId]
     )
 
@@ -63,10 +63,12 @@ export async function messageRoutes(app) {
       [req.user.userId, recipient.id]
     )
 
-    // Send push notification to recipient if they have a token
+    // Send push notification to recipient — skip if their token matches the sender's
+    // (stale token in DB would cause sender to receive their own notification)
     const typeLabel = { text: 'message', image: 'image', video: 'video', document: 'document', audio: 'voice note' }[contentType] ?? contentType
+    const recipientToken = (recipient.fcm_token && recipient.fcm_token !== senders[0]?.fcm_token) ? recipient.fcm_token : null
     await sendPushNotification(
-      recipient.fcm_token,
+      recipientToken,
       senders[0]?.username ?? 'Someone',
       contentType === 'text' ? 'Sent you a message' : `Sent you a ${typeLabel}`,
       { type: 'new_message', senderUsername: senders[0]?.username ?? '', messageId: rows[0].id, contentType, viewOnce: String(viewOnce ?? false) }
