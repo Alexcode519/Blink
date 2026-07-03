@@ -497,7 +497,7 @@ export default function ChatScreen({ route, navigation }) {
         Alert.alert('No internet', 'Message queued for mesh relay — will deliver when a Blink peer is nearby or internet returns.')
       } else if (err.message?.toLowerCase().includes('could not be delivered')) {
         setMessages(prev => prev.filter(m => m.id !== tempId))
-        Alert.alert('Blocked', `You have been blocked by ${recipientUsername}.`)
+        Alert.alert('Blocked', `You have been blocked by ${recipientUsername}. Askies Neh`)
       } else {
         setMessages(prev => prev.filter(m => m.id !== tempId))
         Alert.alert('Error', err.message)
