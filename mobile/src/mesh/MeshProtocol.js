@@ -68,7 +68,7 @@ export async function onData(address, rawData, myKeyHash, onProgress, onDelivere
   const msg = parse(rawData)
   if (!msg?.t) return
 
-  const log = onProgress ?? ((s) => console.log(`[Mesh:${address.slice(-5)}] ${s}`))
+  const log = onProgress ?? (() => {})
 
   switch (msg.t) {
     case 'offer': {

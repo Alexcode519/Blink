@@ -24,7 +24,7 @@ let _subs = []
 
 const MAX_PAYLOAD = 60000 // TCP has no MTU limit like BLE — generous cap
 
-function log(msg) { _onProgress?.(msg); console.log('[WifiDirect]', msg) }
+function log(msg) { _onProgress?.(msg) }
 
 async function safe(obj) {
   try {
@@ -136,11 +136,6 @@ export function stopWifiDirectDiscovery()  { WifiDirectModule?.stopDiscovery() }
 export function connectWifiPeer(deviceAddress) {
   log(`Connecting to Wi-Fi peer: ${deviceAddress}`)
   WifiDirectModule?.connectToPeer(deviceAddress)
-}
-
-export function disconnectWifi() {
-  _isReady = false
-  WifiDirectModule?.disconnect()
 }
 
 export function destroyWifiDirect() {

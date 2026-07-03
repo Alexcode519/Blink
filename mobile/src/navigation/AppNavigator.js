@@ -25,7 +25,6 @@ import CreateGroupScreen from '../screens/CreateGroupScreen'
 import GroupChatScreen from '../screens/GroupChatScreen'
 import GroupInfoScreen from '../screens/GroupInfoScreen'
 import SafetyNumberScreen from '../screens/SafetyNumberScreen'
-import BleTestScreen from '../screens/BleTestScreen'
 import OnboardingScreen from '../screens/OnboardingScreen'
 import InviteReviewScreen from '../screens/InviteReviewScreen'
 import QRInviteScreen from '../screens/QRInviteScreen'
@@ -168,9 +167,7 @@ export default function AppNavigator() {
   async function handleLogin() {
     wasBackgroundRef.current = false
     await setupPushNotifications()   // request permissions BEFORE lock listener is active
-    startMeshBridge((bridged, errors) => {
-      if (bridged > 0) console.log(`[MeshBridge] bridged ${bridged} msgs to server (${errors} errors)`)
-    })
+    startMeshBridge()
     setAuthState('loggedIn')
   }
   function handleLogout() { pendingChatRef.current = null; setAuthState('loggedOut') }
@@ -236,7 +233,6 @@ export default function AppNavigator() {
           <Stack.Screen name="InviteReview" component={InviteReviewScreen} />
           <Stack.Screen name="QRInvite" component={QRInviteScreen} />
           <Stack.Screen name="QRClaim" component={QRClaimScreen} />
-          <Stack.Screen name="BleTest" component={BleTestScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     )
