@@ -98,6 +98,13 @@ export async function messageRoutes(app) {
         [uid]
       )
 
+      // Query 1b: blocked users (exclude from conversations)
+      const { rows: blockedRows } = await pool.query(
+        `SELECT blocked_id FROM blocked_users WHERE blocker_id = $1`,
+        [uid]
+      )
+      const blockedSet = new Set(blockedRows.map(r => r.blocked_id))
+
       // Query 2: unread counts per sender
       const { rows: unreadRows } = await pool.query(
         `SELECT sender_id AS other_user, COUNT(*)::int AS cnt
@@ -130,9 +137,9 @@ export async function messageRoutes(app) {
       )
       const requestedSet = new Set(reqRows.map(r => r.sender_id))
 
-      // Build conversation list from messages
+      // Build conversation list from messages (exclude blocked)
       const messagedIds = new Set()
-      const conversations = msgRows.map(row => {
+      const conversations = msgRows.filter(row => !blockedSet.has(row.other_user)).map(row => {
         messagedIds.add(row.other_user)
         return {
           other_user: row.other_user,
@@ -145,9 +152,9 @@ export async function messageRoutes(app) {
         }
       })
 
-      // Add accepted contacts with no messages
+      // Add accepted contacts with no messages (exclude blocked)
       for (const c of contactRows) {
-        if (!messagedIds.has(c.contact_id)) {
+        if (!messagedIds.has(c.contact_id) && !blockedSet.has(c.contact_id)) {
           conversations.push({
             other_user: c.contact_id,
             other_username: c.username,
