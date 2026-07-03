@@ -45,7 +45,7 @@ const VideoPreview = React.memo(({ uri, style, onPress }) => (
 
 export default function ChatScreen({ route, navigation }) {
   const { recipientUsername, recipientPublicKey } = route.params
-  const [requested, setRequested] = useState(route.params?.requested ?? false)
+  const [requested, setRequested] = useState(false)
   const [verified, setVerified] = useState(false)
   const [messages, setMessages] = useState([])
   const { fontSize } = useFontSize()
