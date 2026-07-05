@@ -49,6 +49,7 @@ export default function ChatScreen({ route, navigation }) {
   const [verified, setVerified] = useState(false)
   const [isBlocked, setIsBlocked] = useState(false)
   const [pinnedId, setPinnedId] = useState(null)
+  const [actionSheet, setActionSheet] = useState(null) // message item for custom action sheet
   const [messages, setMessages] = useState([])
   const { fontSize } = useFontSize()
   const [text, setText] = useState('')
@@ -576,36 +577,7 @@ export default function ChatScreen({ route, navigation }) {
   }
 
   function showMessageActions(item) {
-    const isAlreadyPinned = pinnedId === item.id
-    const buttons = [
-      { text: 'Reply', onPress: () => startReply(item) },
-      { text: 'React', onPress: () => setShowReactionPicker(item.id) },
-      {
-        text: isAlreadyPinned ? '📌 Unpin' : '📌 Pin',
-        onPress: async () => {
-          try {
-            if (isAlreadyPinned) {
-              await api.delete(`/messages/${recipientUsername}/pin`)
-              setPinnedId(null)
-            } else {
-              await api.post(`/messages/${item.id}/pin`)
-              setPinnedId(item.id)
-            }
-          } catch (e) { Alert.alert('Error', e.message) }
-        },
-      },
-    ]
-    if (item.mine) {
-      buttons.push({ text: '🔥 Burn after…', onPress: () => {
-        Alert.alert('Burn after', 'Message disappears for both parties after:', [
-          ...BURN_OPTIONS.map(o => ({ text: o.label, onPress: () => setBurn(item, o.seconds) })),
-          { text: 'Cancel', style: 'cancel' },
-        ])
-      }})
-      buttons.push({ text: 'Delete', style: 'destructive', onPress: () => confirmDeleteMessage(item) })
-    }
-    buttons.push({ text: 'Cancel', style: 'cancel' })
-    Alert.alert('Message', undefined, buttons)
+    setActionSheet(item)
   }
 
   async function setReaction(item, emoji) {
@@ -1362,6 +1334,61 @@ export default function ChatScreen({ route, navigation }) {
       </Modal>
 
 
+      {/* Message action sheet */}
+      <Modal visible={!!actionSheet} transparent animationType="slide" onRequestClose={() => setActionSheet(null)}>
+        <Pressable style={styles.asBackdrop} onPress={() => setActionSheet(null)}>
+          <Pressable style={styles.asSheet} onPress={() => {}}>
+            <View style={styles.asHandle} />
+            <TouchableOpacity style={styles.asRow} onPress={() => { setActionSheet(null); startReply(actionSheet) }}>
+              <Text style={styles.asIcon}>↩️</Text>
+              <Text style={styles.asLabel}>Reply</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.asRow} onPress={() => { setActionSheet(null); setShowReactionPicker(actionSheet?.id) }}>
+              <Text style={styles.asIcon}>😀</Text>
+              <Text style={styles.asLabel}>React</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.asRow} onPress={async () => {
+              const item = actionSheet
+              setActionSheet(null)
+              try {
+                if (pinnedId === item.id) {
+                  await api.delete(`/messages/${recipientUsername}/pin`)
+                  setPinnedId(null)
+                } else {
+                  await api.post(`/messages/${item.id}/pin`)
+                  setPinnedId(item.id)
+                }
+              } catch (e) { Alert.alert('Error', e.message) }
+            }}>
+              <Text style={styles.asIcon}>📌</Text>
+              <Text style={styles.asLabel}>{pinnedId === actionSheet?.id ? 'Unpin' : 'Pin'}</Text>
+            </TouchableOpacity>
+            {actionSheet?.mine && (
+              <>
+                <TouchableOpacity style={styles.asRow} onPress={() => {
+                  const item = actionSheet
+                  setActionSheet(null)
+                  Alert.alert('Burn after', 'Message disappears for both parties after:', [
+                    ...BURN_OPTIONS.map(o => ({ text: o.label, onPress: () => setBurn(item, o.seconds) })),
+                    { text: 'Cancel', style: 'cancel' },
+                  ])
+                }}>
+                  <Text style={styles.asIcon}>🔥</Text>
+                  <Text style={styles.asLabel}>Burn after…</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.asRow} onPress={() => { const item = actionSheet; setActionSheet(null); confirmDeleteMessage(item) }}>
+                  <Text style={styles.asIcon}>🗑</Text>
+                  <Text style={[styles.asLabel, { color: '#ff4444' }]}>Delete</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity style={[styles.asRow, styles.asCancel]} onPress={() => setActionSheet(null)}>
+              <Text style={[styles.asLabel, { color: '#888' }]}>Cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={!!fullscreenVideo} transparent animationType="fade" onRequestClose={() => setFullscreenVideo(null)}>
         <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
           {fullscreenVideo && (
@@ -1428,6 +1455,13 @@ const styles = StyleSheet.create({
   recordingTime: { color: '#fff', fontSize: 16, fontWeight: '600', minWidth: 40 },
   recordingHint: { color: '#666', fontSize: 13, flex: 1 },
   sendRecBtn:    { backgroundColor: '#4f6ef7', borderRadius: 20, padding: 8 },
+  asBackdrop:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  asSheet:       { backgroundColor: '#1a1a1a', borderTopLeftRadius: 18, borderTopRightRadius: 18, paddingBottom: 32, paddingTop: 10 },
+  asHandle:      { width: 36, height: 4, borderRadius: 2, backgroundColor: '#444', alignSelf: 'center', marginBottom: 12 },
+  asRow:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, gap: 14 },
+  asCancel:      { marginTop: 4, borderTopWidth: 1, borderTopColor: '#2a2a2a', justifyContent: 'center' },
+  asIcon:        { fontSize: 20, width: 28 },
+  asLabel:       { color: '#fff', fontSize: 16 },
   pinnedBar:     { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', borderBottomWidth: 1, borderBottomColor: '#2a2a2a', paddingHorizontal: 14, paddingVertical: 8, gap: 10 },
   pinnedIcon:    { fontSize: 16 },
   pinnedLabel:   { color: '#4f6ef7', fontSize: 11, fontWeight: '600', marginBottom: 1 },
