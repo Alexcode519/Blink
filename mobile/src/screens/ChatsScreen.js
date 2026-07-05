@@ -41,6 +41,18 @@ function FeatherIcon() {
   )
 }
 
+function NearbyIcon() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="12" r="3" stroke="#888" strokeWidth="1.8" />
+      <Path d="M6.3 6.3a8 8 0 0 0 0 11.4" stroke="#888" strokeWidth="1.8" strokeLinecap="round" />
+      <Path d="M17.7 6.3a8 8 0 0 1 0 11.4" stroke="#888" strokeWidth="1.8" strokeLinecap="round" />
+      <Path d="M9.2 9.2a4 4 0 0 0 0 5.6" stroke="#888" strokeWidth="1.8" strokeLinecap="round" />
+      <Path d="M14.8 9.2a4 4 0 0 1 0 5.6" stroke="#888" strokeWidth="1.8" strokeLinecap="round" />
+    </Svg>
+  )
+}
+
 function PersonIcon() {
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
@@ -357,6 +369,9 @@ export default function ChatsScreen({ navigation }) {
         {/* Left: gallery */}
         <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
           <FeatherIcon />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate('Nearby')} style={styles.iconBtn}>
+          <NearbyIcon />
         </TouchableOpacity>
 
         {/* Spacer pushes profile to the right */}

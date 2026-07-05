@@ -29,6 +29,7 @@ import OnboardingScreen from '../screens/OnboardingScreen'
 import InviteReviewScreen from '../screens/InviteReviewScreen'
 import QRInviteScreen from '../screens/QRInviteScreen'
 import QRClaimScreen from '../screens/QRClaimScreen'
+import NearbyScreen from '../screens/NearbyScreen'
 
 const Stack = createNativeStackNavigator()
 const screenOpts = { headerShown: false, contentStyle: { backgroundColor: '#0a0a0a' } }
@@ -233,6 +234,7 @@ export default function AppNavigator() {
           <Stack.Screen name="InviteReview" component={InviteReviewScreen} />
           <Stack.Screen name="QRInvite" component={QRInviteScreen} />
           <Stack.Screen name="QRClaim" component={QRClaimScreen} />
+          <Stack.Screen name="Nearby" component={NearbyScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     )

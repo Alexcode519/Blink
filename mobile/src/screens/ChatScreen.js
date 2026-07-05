@@ -48,6 +48,7 @@ export default function ChatScreen({ route, navigation }) {
   const [requested, setRequested] = useState(false)
   const [verified, setVerified] = useState(false)
   const [isBlocked, setIsBlocked] = useState(false)
+  const [pinnedId, setPinnedId] = useState(null)
   const [messages, setMessages] = useState([])
   const { fontSize } = useFontSize()
   const [text, setText] = useState('')
@@ -132,6 +133,9 @@ export default function ChatScreen({ route, navigation }) {
       .catch(() => {})
     api.get('/users/blocked')
       .then(({ blocked }) => setIsBlocked(blocked.includes(recipientUsername.toLowerCase())))
+      .catch(() => {})
+    api.get(`/messages/${recipientUsername}/pinned`)
+      .then(({ pinnedId: id }) => setPinnedId(id ?? null))
       .catch(() => {})
     // Mark incoming messages as read and dismiss notification
     api.post(`/messages/read/${recipientUsername}`, {}).catch(() => {})
@@ -572,9 +576,24 @@ export default function ChatScreen({ route, navigation }) {
   }
 
   function showMessageActions(item) {
+    const isAlreadyPinned = pinnedId === item.id
     const buttons = [
       { text: 'Reply', onPress: () => startReply(item) },
       { text: 'React', onPress: () => setShowReactionPicker(item.id) },
+      {
+        text: isAlreadyPinned ? '📌 Unpin' : '📌 Pin',
+        onPress: async () => {
+          try {
+            if (isAlreadyPinned) {
+              await api.delete(`/messages/${recipientUsername}/pin`)
+              setPinnedId(null)
+            } else {
+              await api.post(`/messages/${item.id}/pin`)
+              setPinnedId(item.id)
+            }
+          } catch (e) { Alert.alert('Error', e.message) }
+        },
+      },
     ]
     if (item.mine) {
       buttons.push({ text: '🔥 Burn after…', onPress: () => {
@@ -1136,6 +1155,31 @@ export default function ChatScreen({ route, navigation }) {
         </View>
       </View>
 
+      {pinnedId && (() => {
+        const pinned = messages.find(m => m.id === pinnedId)
+        if (!pinned) return null
+        const snippet = pinned.contentType === 'text' ? pinned.payload : `[${pinned.contentType}]`
+        return (
+          <TouchableOpacity
+            style={styles.pinnedBar}
+            onPress={() => {
+              const idx = messages.findIndex(m => m.id === pinnedId)
+              if (idx >= 0) listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 })
+            }}
+            onLongPress={async () => {
+              await api.delete(`/messages/${recipientUsername}/pin`).catch(() => {})
+              setPinnedId(null)
+            }}
+          >
+            <Text style={styles.pinnedIcon}>📌</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pinnedLabel}>Pinned message</Text>
+              <Text style={styles.pinnedSnippet} numberOfLines={1}>{snippet}</Text>
+            </View>
+          </TouchableOpacity>
+        )
+      })()}
+
       {searchOpen && (
         <View style={styles.searchBar}>
           <TextInput
@@ -1384,6 +1428,10 @@ const styles = StyleSheet.create({
   recordingTime: { color: '#fff', fontSize: 16, fontWeight: '600', minWidth: 40 },
   recordingHint: { color: '#666', fontSize: 13, flex: 1 },
   sendRecBtn:    { backgroundColor: '#4f6ef7', borderRadius: 20, padding: 8 },
+  pinnedBar:     { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', borderBottomWidth: 1, borderBottomColor: '#2a2a2a', paddingHorizontal: 14, paddingVertical: 8, gap: 10 },
+  pinnedIcon:    { fontSize: 16 },
+  pinnedLabel:   { color: '#4f6ef7', fontSize: 11, fontWeight: '600', marginBottom: 1 },
+  pinnedSnippet: { color: '#aaa', fontSize: 13 },
   searchBar:     { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1f1f1f', gap: 6 },
   searchInput:   { flex: 1, color: '#fff', fontSize: 15, backgroundColor: '#1a1a1a', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
   searchCount:   { color: '#888', fontSize: 13, minWidth: 56, textAlign: 'center' },

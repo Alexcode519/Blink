@@ -681,6 +681,47 @@ export async function messageRoutes(app) {
     return { ok: true }
   })
 
+  // Pin a message in a conversation
+  app.post('/messages/:messageId/pin', async (req, reply) => {
+    const uid = req.user.userId
+    const { rows: msgRows } = await pool.query(
+      'SELECT sender_id, recipient_id FROM messages WHERE id = $1',
+      [req.params.messageId]
+    )
+    if (!msgRows.length) return reply.code(404).send({ error: 'Message not found' })
+    const { sender_id, recipient_id } = msgRows[0]
+    if (sender_id !== uid && recipient_id !== uid) return reply.code(403).send({ error: 'Forbidden' })
+    const otherId = sender_id === uid ? recipient_id : sender_id
+    await pool.query(
+      `INSERT INTO pinned_messages (user_id, other_user_id, message_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, other_user_id) DO UPDATE SET message_id = $3, pinned_at = NOW()`,
+      [uid, otherId, req.params.messageId]
+    )
+    return { ok: true }
+  })
+
+  // Unpin conversation
+  app.delete('/messages/:username/pin', async (req, reply) => {
+    const uid = req.user.userId
+    const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()])
+    if (!rows.length) return reply.code(404).send({ error: 'User not found' })
+    await pool.query('DELETE FROM pinned_messages WHERE user_id = $1 AND other_user_id = $2', [uid, rows[0].id])
+    return { ok: true }
+  })
+
+  // Get pinned message id for a conversation
+  app.get('/messages/:username/pinned', async (req, reply) => {
+    const uid = req.user.userId
+    const { rows: userRows } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()])
+    if (!userRows.length) return reply.code(404).send({ error: 'User not found' })
+    const { rows } = await pool.query(
+      `SELECT message_id FROM pinned_messages WHERE user_id = $1 AND other_user_id = $2`,
+      [uid, userRows[0].id]
+    )
+    return { pinnedId: rows[0]?.message_id ?? null }
+  })
+
   // Recipient polls for the outcome of their save request
   app.get('/messages/save-requests/:requestId/status', async (req, reply) => {
     const { rows } = await pool.query(

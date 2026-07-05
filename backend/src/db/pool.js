@@ -59,6 +59,14 @@ pool.query(`CREATE TABLE IF NOT EXISTS accepted_contacts (
   `))
   .then(() => console.log('accepted_contacts backfilled from message history'))
   .catch(e => console.error('accepted_contacts migration failed:', e.message))
+pool.query(`CREATE TABLE IF NOT EXISTS pinned_messages (
+  user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  other_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id   UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  pinned_at    TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, other_user_id)
+)`).then(() => console.log('pinned_messages table ready')).catch(e => console.error('pinned_messages migration failed:', e.message))
+
 pool.query(`CREATE TABLE IF NOT EXISTS blocked_users (
   blocker_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   blocked_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
