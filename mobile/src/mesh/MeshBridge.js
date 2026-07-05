@@ -18,20 +18,35 @@ import { getQueue, dequeue } from './RelayQueue'
 import { decryptFromSender, syncPublicKey } from '../crypto/keys'
 
 let _unsubscribe = null
+let _interval = null
 let _onBridged = null
 
-// Call once at app startup. onBridged(count, errors) fires each time messages are bridged.
+const AUTO_SYNC_MS = 30000 // sync every 30s when online and queue non-empty
+
+// Call once at app startup.
 export function startMeshBridge(onBridged) {
   _onBridged = onBridged
+
+  // Sync immediately on connectivity restore
   _unsubscribe = NetInfo.addEventListener(state => {
     if (state.isConnected && state.isInternetReachable) {
       bridgeNow().catch(() => {})
     }
   })
+
+  // Also sync on a regular interval
+  _interval = setInterval(async () => {
+    const state = await NetInfo.fetch()
+    if (!state.isConnected || !state.isInternetReachable) return
+    const queue = await getQueue()
+    if (!queue.length) return
+    bridgeNow().catch(() => {})
+  }, AUTO_SYNC_MS)
 }
 
 export function stopMeshBridge() {
   _unsubscribe?.()
+  if (_interval) { clearInterval(_interval); _interval = null }
 }
 
 // Attempt to bridge all queued messages immediately (can be called manually too)

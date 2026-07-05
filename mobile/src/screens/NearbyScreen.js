@@ -11,7 +11,7 @@ import { bridgeNow } from '../mesh/MeshBridge'
 export default function NearbyScreen({ navigation }) {
   const [online, setOnline] = useState(true)
   const [queue, setQueue] = useState([])
-  const [bridging, setBridging] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [lastSync, setLastSync] = useState(null)
 
   useFocusEffect(useCallback(() => {
@@ -19,7 +19,9 @@ export default function NearbyScreen({ navigation }) {
     const unsub = NetInfo.addEventListener(state => {
       setOnline(!!(state.isConnected && state.isInternetReachable))
     })
-    return () => unsub()
+    // Refresh queue display every 5s while screen is open
+    const timer = setInterval(refresh, 5000)
+    return () => { unsub(); clearInterval(timer) }
   }, []))
 
   async function refresh() {
@@ -27,9 +29,9 @@ export default function NearbyScreen({ navigation }) {
     setQueue(q)
   }
 
-  async function handleBridgeNow() {
-    if (bridging) return
-    setBridging(true)
+  async function handleSyncNow() {
+    if (syncing) return
+    setSyncing(true)
     try {
       await bridgeNow()
       await refresh()
@@ -37,7 +39,7 @@ export default function NearbyScreen({ navigation }) {
     } catch (e) {
       Alert.alert('Sync failed', e.message)
     } finally {
-      setBridging(false)
+      setSyncing(false)
     }
   }
 
@@ -86,22 +88,24 @@ export default function NearbyScreen({ navigation }) {
         </Text>
       </View>
 
-      {/* Sync button */}
+      {/* Sync status */}
       <View style={styles.syncRow}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.syncLabel}>Offline message queue</Text>
-          {lastSync && <Text style={styles.syncTime}>Last sync: {lastSync.toLocaleTimeString()}</Text>}
+          <Text style={styles.syncTime}>
+            {syncing ? 'Syncing…' : lastSync ? `Last sync: ${lastSync.toLocaleTimeString()}` : 'Auto-syncs every 30s when online'}
+          </Text>
         </View>
-        <TouchableOpacity
-          style={[styles.syncBtn, (!online || bridging) && styles.syncBtnDisabled]}
-          onPress={handleBridgeNow}
-          disabled={!online || bridging}
-        >
-          {bridging
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={styles.syncBtnText}>Sync now</Text>
-          }
-        </TouchableOpacity>
+        {syncing
+          ? <ActivityIndicator size="small" color="#4f6ef7" />
+          : <TouchableOpacity
+              style={[styles.syncBtn, !online && styles.syncBtnDisabled]}
+              onPress={handleSyncNow}
+              disabled={!online}
+            >
+              <Text style={styles.syncBtnText}>Sync now</Text>
+            </TouchableOpacity>
+        }
       </View>
 
       {queue.length === 0 ? (
