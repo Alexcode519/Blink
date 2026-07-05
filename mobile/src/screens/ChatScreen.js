@@ -1364,23 +1364,10 @@ export default function ChatScreen({ route, navigation }) {
               <Text style={styles.asLabel}>{pinnedId === actionSheet?.id ? 'Unpin' : 'Pin'}</Text>
             </TouchableOpacity>
             {actionSheet?.mine && (
-              <>
-                <TouchableOpacity style={styles.asRow} onPress={() => {
-                  const item = actionSheet
-                  setActionSheet(null)
-                  Alert.alert('Burn after', 'Message disappears for both parties after:', [
-                    ...BURN_OPTIONS.map(o => ({ text: o.label, onPress: () => setBurn(item, o.seconds) })),
-                    { text: 'Cancel', style: 'cancel' },
-                  ])
-                }}>
-                  <Text style={styles.asIcon}>🔥</Text>
-                  <Text style={styles.asLabel}>Burn after…</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.asRow} onPress={() => { const item = actionSheet; setActionSheet(null); confirmDeleteMessage(item) }}>
-                  <Text style={styles.asIcon}>🗑</Text>
-                  <Text style={[styles.asLabel, { color: '#ff4444' }]}>Delete</Text>
-                </TouchableOpacity>
-              </>
+              <TouchableOpacity style={styles.asRow} onPress={() => { const item = actionSheet; setActionSheet(null); confirmDeleteMessage(item) }}>
+                <Text style={styles.asIcon}>🗑</Text>
+                <Text style={[styles.asLabel, { color: '#ff4444' }]}>Delete</Text>
+              </TouchableOpacity>
             )}
             <TouchableOpacity style={[styles.asRow, styles.asCancel]} onPress={() => setActionSheet(null)}>
               <Text style={[styles.asLabel, { color: '#888' }]}>Cancel</Text>
