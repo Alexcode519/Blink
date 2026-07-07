@@ -16,6 +16,7 @@ import { saveToLibrary, loadIndex } from '../library/storage'
 import { api } from '../api/client'
 import { encryptForRecipient, decryptFromSender } from '../crypto/keys'
 import SaveRequestModal from '../components/SaveRequestModal'
+import PhotoSendPreview from '../components/PhotoSendPreview'
 import Icon from 'react-native-vector-icons/Feather'
 import notifee from '@notifee/react-native'
 import { notifIdForSender } from '../notifications/setup'
@@ -59,6 +60,7 @@ export default function ChatScreen({ route, navigation }) {
   const [saveRequest, setSaveRequest] = useState(null)
   const dismissedSaveIds = useRef(new Set()) // IDs acted on — never re-show
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [pendingPhoto, setPendingPhoto] = useState(null)
 
   const [burnPicker, setBurnPicker] = useState(null) // messageId being configured
   const [fullscreenVideo, setFullscreenVideo] = useState(null)
@@ -629,7 +631,7 @@ export default function ChatScreen({ route, navigation }) {
     await new Promise(r => setTimeout(r, 500))
     const asset = result.assets[0]
     const base64 = asset.base64 ?? await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
-    await sendPayload(base64, 'image', asset.fileName ?? 'photo')
+    setPendingPhoto({ uri: asset.uri, base64, label: asset.fileName ?? 'photo' })
   }
 
   async function pickPhoto() {
@@ -640,7 +642,13 @@ export default function ChatScreen({ route, navigation }) {
     if (result.didCancel || !result.assets?.[0]) return
     const asset = result.assets[0]
     const base64 = asset.base64 ?? await RNFS.readFile(asset.uri.replace('file://', ''), 'base64')
-    await sendPayload(base64, 'image', asset.fileName)
+    setPendingPhoto({ uri: asset.uri, base64, label: asset.fileName })
+  }
+
+  async function handlePhotoPreviewSend(base64) {
+    const label = pendingPhoto?.label
+    setPendingPhoto(null)
+    await sendPayload(base64, 'image', label)
   }
 
   async function pickVideo() {
@@ -1386,6 +1394,14 @@ export default function ChatScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
       </Modal>
+
+      <PhotoSendPreview
+        visible={!!pendingPhoto}
+        uri={pendingPhoto?.uri}
+        originalBase64={pendingPhoto?.base64}
+        onSend={handlePhotoPreviewSend}
+        onCancel={() => setPendingPhoto(null)}
+      />
 
       {saveRequest && (
         <SaveRequestModal

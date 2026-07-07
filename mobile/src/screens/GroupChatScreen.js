@@ -19,6 +19,7 @@ import notifee from '@notifee/react-native'
 import { setActiveChat, clearActiveChat } from '../notifications/activeChat'
 import { notifIdForGroup } from '../notifications/setup'
 import SaveRequestModal from '../components/SaveRequestModal'
+import PhotoSendPreview from '../components/PhotoSendPreview'
 
 const POLL_INTERVAL = 3000
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
@@ -33,6 +34,7 @@ export default function GroupChatScreen({ route, navigation }) {
   const [members, setMembers]       = useState([])
   const [myUsername, setMyUsername] = useState('')
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [pendingPhoto, setPendingPhoto] = useState(null)
   const [replyingTo, setReplyingTo] = useState(null)
   const [showReactionPicker, setShowReactionPicker] = useState(null)
   const [memberReads, setMemberReads] = useState({})
@@ -449,12 +451,17 @@ export default function GroupChatScreen({ route, navigation }) {
         : await launchImageLibrary({ mediaType: 'photo', quality: 0.4, maxWidth: 1280, maxHeight: 1280, includeBase64: true })
       if (result.didCancel || !result.assets?.length) return
       const asset = result.assets[0]
-      await sendPayload({ uri: `data:image/jpeg;base64,${asset.base64}` }, 'image')
+      setPendingPhoto({ uri: asset.uri, base64: asset.base64 })
     } catch (e) {
       Alert.alert('Error', e.message)
     } finally {
       pickerGuard.end()
     }
+  }
+
+  async function handlePhotoPreviewSend(base64) {
+    setPendingPhoto(null)
+    await sendPayload({ uri: `data:image/jpeg;base64,${base64}` }, 'image')
   }
 
   async function pickDocument() {
@@ -652,6 +659,14 @@ export default function GroupChatScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
+      <PhotoSendPreview
+        visible={!!pendingPhoto}
+        uri={pendingPhoto?.uri}
+        originalBase64={pendingPhoto?.base64}
+        onSend={handlePhotoPreviewSend}
+        onCancel={() => setPendingPhoto(null)}
+      />
+
       {groupSaveRequest && (
         <SaveRequestModal
           request={groupSaveRequest}
