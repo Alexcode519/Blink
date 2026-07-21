@@ -6,7 +6,7 @@ import { detectFaces, blurFacesInImage } from '../utils/faceBlur'
 // baked permanently into the pixels before the image ever leaves the device —
 // toggling the switch off just swaps back to the untouched original for send.
 export default function PhotoSendPreview({ visible, uri, originalBase64, onSend, onCancel }) {
-  const [phase, setPhase] = useState('detecting') // detecting | preview | sending
+  const [phase, setPhase] = useState('detecting') // detecting | preview | detect-error | sending
   const [blurredBase64, setBlurredBase64] = useState(null)
   const [blurEnabled, setBlurEnabled] = useState(true)
   const cancelled = useRef(false)
@@ -19,7 +19,16 @@ export default function PhotoSendPreview({ visible, uri, originalBase64, onSend,
     setBlurEnabled(true)
 
     ;(async () => {
-      const faces = await detectFaces(uri)
+      let faces
+      try {
+        faces = await detectFaces(uri)
+      } catch {
+        // Detection genuinely failed (e.g. ML Kit unavailable) — this is NOT
+        // the same as "no faces found," so we must not silently auto-send.
+        // Make the sender explicitly confirm before it goes out unchecked.
+        if (!cancelled.current) setPhase('detect-error')
+        return
+      }
       if (cancelled.current) return
       if (!faces.length) {
         onSend(originalBase64)
@@ -43,12 +52,42 @@ export default function PhotoSendPreview({ visible, uri, originalBase64, onSend,
     onSend(blurEnabled ? blurredBase64 : originalBase64)
   }
 
+  function handleSendUnchecked() {
+    setPhase('sending')
+    onSend(originalBase64)
+  }
+
   function handleCancel() {
     cancelled.current = true
     onCancel()
   }
 
   if (!visible || phase === 'detecting') return null
+
+  if (phase === 'detect-error') {
+    return (
+      <Modal transparent visible animationType="fade" onRequestClose={handleCancel}>
+        <View style={styles.overlay}>
+          <View style={styles.card}>
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.toggleLabel}>Couldn't check for faces</Text>
+                <Text style={styles.toggleSub}>Face detection failed, so this photo has not been checked or blurred. Send it as-is, or cancel.</Text>
+              </View>
+            </View>
+            <View style={styles.actions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
+                <Text style={styles.cancelLabel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.sendBtn} onPress={handleSendUnchecked}>
+                <Text style={styles.sendLabel}>Send anyway</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    )
+  }
 
   const previewBase64 = blurEnabled ? blurredBase64 : originalBase64
   const previewUri = `data:image/jpeg;base64,${previewBase64}`
