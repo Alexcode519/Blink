@@ -73,6 +73,14 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+// Release signing credentials live outside version control in keystore.properties
+// (see keystore.properties.example) so the real store/key passwords never hit git.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -94,10 +102,17 @@ android {
             keyPassword 'android'
         }
         release {
-            storeFile file('blink-release.keystore')
-            storePassword 'blink1234'
-            keyAlias 'blink'
-            keyPassword 'blink1234'
+            if (keystorePropertiesFile.exists()) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            } else {
+                throw new GradleException(
+                    "Missing android/keystore.properties — copy keystore.properties.example, " +
+                    "fill in the real release signing credentials, and keep it out of git."
+                )
+            }
         }
     }
     buildTypes {
