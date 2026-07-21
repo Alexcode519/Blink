@@ -47,6 +47,24 @@
     <li><span class="badge green">✓</span> Browsing history</li>
   </ul>
 
+  <h2>On-device features</h2>
+  <ul>
+    <li><span class="badge">Face blur</span> Before you send a photo, Blink checks it for faces using Google ML Kit's on-device face detector — the image is analyzed entirely on your phone and never uploaded to Google, Blink's servers, or any third party for this purpose. If a face is found, it's permanently blurred into the photo before sending (with an option to turn blurring off for that photo). Only the final image you choose to send — blurred or not — ever leaves your device.</li>
+    <li><span class="badge">Biometric unlock</span> If you enable Face/Fingerprint unlock, the biometric match itself is performed entirely by your device's operating system and secure hardware. Blink never receives, stores, or has access to your fingerprint or face biometric data — the app only receives a yes/no unlock result from the OS.</li>
+    <li><span class="badge">Panic wipe</span> Your duress pattern is compared to your input locally on-device. Blink's servers are never told whether a duress wipe occurred.</li>
+  </ul>
+
+  <h2>App permissions</h2>
+  <ul>
+    <li><span class="badge">Camera</span> Only used when you choose to take a photo or video to send — capture happens directly in the chat you're sending to.</li>
+    <li><span class="badge">Microphone</span> Only used when you choose to record a voice note or video with sound.</li>
+    <li><span class="badge">Photos / storage</span> Used to let you attach existing photos or videos from your device, and to save media to your device when you approve a save request from a contact.</li>
+    <li><span class="badge">Bluetooth &amp; Wi-Fi state</span> Used only for the offline mesh relay feature, to discover and relay encrypted messages between nearby devices when you don't have internet access.</li>
+    <li><span class="badge">Location</span> Android requires this permission to perform Bluetooth LE scanning for nearby mesh-relay devices on some Android versions. Blink does not read, use, or store your GPS coordinates for any purpose.</li>
+    <li><span class="badge">Biometric / fingerprint</span> Used only to let you unlock the app with your device's built-in biometric hardware.</li>
+    <li><span class="badge">Notifications</span> Used to alert you to new messages.</li>
+  </ul>
+
   <h2>End-to-end encryption</h2>
   <p>All messages are encrypted using NaCl (libsodium), a peer-reviewed, open cryptography library. Your encryption keys are generated on your device and never transmitted to our servers. This means Blink's operators cannot read your messages even if compelled to do so.</p>
 
@@ -66,8 +84,7 @@
   </ul>
 
   <h2>Bluetooth mesh relay</h2>
-  <p>When you enable the Bluetooth mesh relay feature, Blink uses Bluetooth LE to relay encrypted messages between nearby devices. The content of relayed messages remains encrypted at all times — relay nodes cannot read them. Location data is not collected or transmitted.</p>
-  <p>Bluetooth scanning requires location permission on Android 11 and below. This permission is used exclusively for Bluetooth LE device discovery and not for any location-based service.</p>
+  <p>When you enable the Bluetooth mesh relay feature, Blink uses Bluetooth LE to relay encrypted messages between nearby devices. The content of relayed messages remains encrypted at all times — relay nodes cannot read them. See "App permissions" above for why this feature requires the location permission.</p>
 
   <h2>Children</h2>
   <p>Blink is not directed at children under 13. We do not knowingly collect data from children.</p>

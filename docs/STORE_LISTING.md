@@ -43,35 +43,8 @@ Social / Communication
 Everyone (no objectionable content)
 
 ## Privacy policy URL
-https://blink-app.example.com/privacy  (replace with your actual URL)
+https://alexcode519.github.io/Blink/privacy-policy.html
 
 ---
 
-# Privacy Policy (inline version for reference)
-
-## Blink Privacy Policy
-
-**What we collect:**
-- Your username and password hash (bcrypt) — stored on our servers to authenticate you
-- Your public encryption key — shared with contacts so they can encrypt messages for you
-- Encrypted message ciphertext — stored temporarily until delivered, then deleted
-- FCM token — used only to deliver push notifications
-
-**What we never collect:**
-- Message content (all content is encrypted before reaching our servers)
-- Your contacts or address book
-- Location data
-- Device identifiers or advertising IDs
-- Browsing history or behaviour
-
-**Data retention:**
-- Messages are deleted from our servers once delivered (or after your configured disappearing-messages window)
-- View-once media ciphertext is wiped immediately after the recipient opens it
-- You can delete your account at any time, which removes all stored data
-
-**Third parties:**
-- Google Firebase Cloud Messaging (FCM) — push notification delivery only
-- No analytics, no advertising, no data brokers
-
-**Contact:**
-For privacy questions: [your email here]
+The canonical privacy policy lives at [`docs/privacy-policy.html`](./privacy-policy.html) (published via GitHub Pages at the URL above) — edit it there, not here, to avoid the two copies drifting out of sync.
