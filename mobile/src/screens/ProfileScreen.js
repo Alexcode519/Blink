@@ -6,7 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { launchImageLibrary } from 'react-native-image-picker'
 import RNFS from 'react-native-fs'
-import { api } from '../api/client'
+import { api, setToken, clearToken } from '../api/client'
 import { isBiometricAvailable } from '../utils/biometrics'
 import { panicWipe } from '../utils/panicWipe'
 import { LANGUAGES, t } from '../i18n/translations'
@@ -135,7 +135,7 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
     setLoading(true)
     try {
       const { token, username: updated } = await api.patch('/users/me/username', { username: trimmed })
-      await AsyncStorage.setItem('token', token)
+      setToken(token)
       await AsyncStorage.setItem('username', updated)
       setUsername(updated)
       setNewUsername(updated)
@@ -194,10 +194,11 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
     setDeleting(true)
     try {
       await api.delete('/users/me', { password: deletePassword })
+      clearToken()
       await panicWipe()
       await RNFS.unlink(AVATAR_PATH).catch(() => {})
-      await AsyncStorage.multiRemove([
-        'token', 'username', 'blink_cache_conversations', 'blink_cache_groups',
+      await AsyncStorage.removeMany([
+        'username', 'blink_cache_conversations', 'blink_cache_groups',
         'blink_pattern', 'blink_pattern_enabled', 'blink_duress_pattern', 'blink_biometric_enabled',
       ])
       onLogout()
@@ -214,8 +215,8 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign out', style: 'destructive', onPress: () => {
+          clearToken()
           Promise.all([
-            AsyncStorage.removeItem('token'),
             AsyncStorage.removeItem('username'),
             AsyncStorage.removeItem('blink_cache_conversations'),
             AsyncStorage.removeItem('blink_cache_groups'),

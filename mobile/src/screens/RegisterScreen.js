@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Icon from 'react-native-vector-icons/Feather'
-import { api } from '../api/client'
+import { api, setToken } from '../api/client'
 import { generateAndStoreKeyPair } from '../crypto/keys'
 
 export default function RegisterScreen({ navigation, onLogin }) {
@@ -26,7 +26,7 @@ export default function RegisterScreen({ navigation, onLogin }) {
         password,
         publicKey,
       })
-      await AsyncStorage.setItem('token', token)
+      setToken(token)
       await AsyncStorage.setItem('username', user)
       onLogin()
     } catch (err) {

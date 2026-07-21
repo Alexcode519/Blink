@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Icon from 'react-native-vector-icons/Feather'
-import { api } from '../api/client'
+import { api, setToken } from '../api/client'
 import { authenticateWithBiometric } from '../utils/biometrics'
 import { generateAndStoreKeyPair } from '../crypto/keys'
 import PatternLock from '../components/PatternLock'
@@ -83,7 +83,7 @@ export default function LoginScreen({ navigation, onLogin, isLocked, onShowQR })
         username: username.trim(),
         password,
       })
-      await AsyncStorage.setItem('token', token)
+      setToken(token)
       await AsyncStorage.setItem('username', user)
       // Always regenerate keys on login so local private key always matches server public key
       const { publicKey } = await generateAndStoreKeyPair()

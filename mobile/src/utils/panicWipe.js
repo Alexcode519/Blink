@@ -11,7 +11,7 @@ export async function panicWipe() {
   try {
     const keys = await AsyncStorage.getAllKeys()
     const chatCacheKeys = keys.filter(k => k.startsWith('blink_chat_'))
-    if (chatCacheKeys.length) await AsyncStorage.multiRemove(chatCacheKeys)
+    if (chatCacheKeys.length) await AsyncStorage.removeMany(chatCacheKeys)
     await AsyncStorage.removeItem('blink_library_index')
   } catch {}
   try {
