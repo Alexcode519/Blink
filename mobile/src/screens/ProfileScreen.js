@@ -8,6 +8,7 @@ import { launchImageLibrary } from 'react-native-image-picker'
 import RNFS from 'react-native-fs'
 import { api } from '../api/client'
 import { isBiometricAvailable } from '../utils/biometrics'
+import { panicWipe } from '../utils/panicWipe'
 import { LANGUAGES, t } from '../i18n/translations'
 import { FONT_SIZES, useFontSize } from '../context/FontSizeContext'
 
@@ -32,6 +33,9 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
   const [loading, setLoading]             = useState(false)
   const [patternEnabled, setPatternEnabled] = useState(false)
   const [passwordOpen, setPasswordOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const [biometricEnabled, setBiometricEnabled] = useState(false)
   const [biometricAvailable, setBiometricAvailable] = useState(false)
   const [language, setLanguage] = useState('en')
@@ -169,6 +173,40 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
 
   function handleLock() {
     onLock()
+  }
+
+  function handleDeleteAccount() {
+    if (!deletePassword) {
+      Alert.alert('Error', 'Enter your password to confirm.')
+      return
+    }
+    Alert.alert(
+      'Delete account permanently?',
+      'This deletes your account and all your messages, photos and files from our servers. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete forever', style: 'destructive', onPress: doDeleteAccount },
+      ]
+    )
+  }
+
+  async function doDeleteAccount() {
+    setDeleting(true)
+    try {
+      await api.delete('/users/me', { password: deletePassword })
+      await panicWipe()
+      await RNFS.unlink(AVATAR_PATH).catch(() => {})
+      await AsyncStorage.multiRemove([
+        'token', 'username', 'blink_cache_conversations', 'blink_cache_groups',
+        'blink_pattern', 'blink_pattern_enabled', 'blink_duress_pattern', 'blink_biometric_enabled',
+      ])
+      onLogout()
+    } catch (err) {
+      setDeletePassword('')
+      Alert.alert('Error', err.message)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   function handleLogout() {
@@ -363,6 +401,25 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
                   secureTextEntry placeholder="Confirm new password" placeholderTextColor="#555" />
                 <TouchableOpacity style={styles.btn} onPress={savePassword} disabled={loading}>
                   <Text style={styles.btnText}>Save Password</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity style={[styles.collapseRow, { marginTop: 20 }]} onPress={() => setDeleteOpen(o => !o)}>
+              <Text style={[styles.settingLabel, { color: '#ff4444' }]}>Delete Account</Text>
+              <Text style={styles.chevron}>{deleteOpen ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+            {deleteOpen && (
+              <>
+                <Text style={styles.hint}>
+                  Permanently deletes your account, messages, photos and files from our servers. This cannot be undone.
+                </Text>
+                <TextInput style={styles.input} value={deletePassword} onChangeText={setDeletePassword}
+                  secureTextEntry placeholder="Enter your password to confirm" placeholderTextColor="#555" />
+                <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteAccount} disabled={deleting}>
+                  {deleting
+                    ? <ActivityIndicator color="#ff4444" />
+                    : <Text style={styles.deleteBtnText}>Delete My Account</Text>}
                 </TouchableOpacity>
               </>
             )}
@@ -631,6 +688,8 @@ const styles = StyleSheet.create({
   signOutHint:      { color: '#444', fontSize: 12, textAlign: 'center', marginTop: 10 },
   logoutBtn:        { borderWidth: 1, borderColor: '#ff4444', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 10 },
   logoutText:       { color: '#ff4444', fontWeight: '600', fontSize: 15 },
+  deleteBtn:        { backgroundColor: '#ff4444', borderRadius: 10, padding: 14, alignItems: 'center' },
+  deleteBtnText:    { color: '#fff', fontWeight: '600', fontSize: 15 },
   fontSizePreview:     { color: '#555', marginTop: 14, lineHeight: 22 },
   helpRow:          { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14, gap: 12 },
   helpIcon2:        { fontSize: 20 },

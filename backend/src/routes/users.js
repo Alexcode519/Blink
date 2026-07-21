@@ -204,6 +204,72 @@ export async function userRoutes(app) {
     return { ok: true }
   })
 
+  // Delete own account permanently. Requires current password confirmation.
+  // messages/save_requests have no ON DELETE clause on their user FKs, so
+  // they're removed explicitly; everything else (contacts, blocks, group
+  // membership, reactions, pins, invites, feedback) cascades or SETs NULL
+  // automatically once the user row itself is deleted.
+  app.delete('/users/me', {
+    config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['password'],
+        properties: { password: { type: 'string' } },
+      },
+    },
+  }, async (req, reply) => {
+    const { rows } = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.userId])
+    if (!rows.length) return reply.code(404).send({ error: 'User not found' })
+
+    const [salt, storedHash] = rows[0].password_hash.split(':')
+    const match = timingSafeEqual(
+      Buffer.from(storedHash, 'hex'),
+      Buffer.from(hashPassword(req.body.password, salt), 'hex')
+    )
+    if (!match) return reply.code(401).send({ error: 'Password is incorrect' })
+
+    const userId = req.user.userId
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+
+      // Hand off any group this user created to another member so the group
+      // survives for everyone else — groups where they're the only member
+      // still cascade-delete below, which is correct since no one else is affected.
+      const { rows: ownedGroups } = await client.query('SELECT id FROM groups WHERE created_by = $1', [userId])
+      for (const { id: groupId } of ownedGroups) {
+        const { rows: nextOwner } = await client.query(
+          'SELECT user_id FROM group_members WHERE group_id = $1 AND user_id != $2 ORDER BY joined_at ASC LIMIT 1',
+          [groupId, userId]
+        )
+        if (nextOwner.length) {
+          await client.query('UPDATE groups SET created_by = $1 WHERE id = $2', [nextOwner[0].user_id, groupId])
+          await client.query(`UPDATE group_members SET role = 'admin' WHERE group_id = $1 AND user_id = $2`, [groupId, nextOwner[0].user_id])
+        }
+      }
+
+      await client.query(
+        `DELETE FROM save_requests WHERE message_id IN (
+           SELECT id FROM messages WHERE sender_id = $1 OR recipient_id = $1
+         )`,
+        [userId]
+      )
+      await client.query('DELETE FROM messages WHERE sender_id = $1 OR recipient_id = $1', [userId])
+
+      await client.query('DELETE FROM users WHERE id = $1', [userId])
+
+      await client.query('COMMIT')
+      return { ok: true }
+    } catch (e) {
+      await client.query('ROLLBACK')
+      console.error('[delete account] error:', e.message)
+      return reply.code(500).send({ error: 'Failed to delete account' })
+    } finally {
+      client.release()
+    }
+  })
+
   // Get my blocked users list
   app.get('/users/blocked', async (req) => {
     const { rows } = await pool.query(
