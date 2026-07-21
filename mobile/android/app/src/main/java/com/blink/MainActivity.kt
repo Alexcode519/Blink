@@ -11,7 +11,12 @@ class MainActivity : ReactActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+    // FLAG_SECURE blocks screenshots/screen-recording of chats, but Android
+    // emulators treat their virtual display as insecure and render the whole
+    // window black when this is set — only enable it in release builds.
+    if (!BuildConfig.DEBUG) {
+      window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+    }
   }
 
   override fun getMainComponentName(): String = "Blink"

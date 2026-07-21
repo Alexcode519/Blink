@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { AppState, Linking } from 'react-native'
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import messaging from '@react-native-firebase/messaging'
@@ -32,7 +33,6 @@ import QRClaimScreen from '../screens/QRClaimScreen'
 import NearbyScreen from '../screens/NearbyScreen'
 
 const Stack = createNativeStackNavigator()
-const screenOpts = { headerShown: false, contentStyle: { backgroundColor: '#0a0a0a' } }
 
 const linking = {
   prefixes: [
@@ -54,6 +54,11 @@ export default function AppNavigator() {
   const appStateRef = useRef(AppState.currentState)
   const wasBackgroundRef = useRef(false)
   const navRef = useNavigationContainerRef()
+  const insets = useSafeAreaInsets()
+  const screenOpts = {
+    headerShown: false,
+    contentStyle: { backgroundColor: '#0a0a0a', paddingTop: insets.top },
+  }
 
   // Load onboarding state at top level so hooks are never conditional
   useEffect(() => {
