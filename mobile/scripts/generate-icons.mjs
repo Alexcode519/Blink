@@ -1,8 +1,8 @@
-// Generates Blink app icons at all required Android sizes from an SVG template.
+// Generates Blink app icons for Android and iOS from a shared SVG template.
 // Usage: node scripts/generate-icons.mjs
 
 import sharp from 'sharp'
-import { writeFileSync, mkdirSync } from 'fs'
+import { writeFileSync, mkdirSync, readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
@@ -53,6 +53,20 @@ const SIZES = {
 const PLAY_STORE_SIZE = 512
 const NOTIFICATION_SIZE = 24
 
+// iOS AppIcon.appiconset — matches the slots already declared in Contents.json
+// (classic per-scale iPhone format, not the newer single-1024 universal format).
+const IOS_ICONS = [
+  { filename: 'icon-20@2x.png',       size: 40   },
+  { filename: 'icon-20@3x.png',       size: 60   },
+  { filename: 'icon-29@2x.png',       size: 58   },
+  { filename: 'icon-29@3x.png',       size: 87   },
+  { filename: 'icon-40@2x.png',       size: 80   },
+  { filename: 'icon-40@3x.png',       size: 120  },
+  { filename: 'icon-60@2x.png',       size: 120  },
+  { filename: 'icon-60@3x.png',       size: 180  },
+  { filename: 'icon-1024.png',        size: 1024 },
+]
+
 async function generate() {
   const svgBuf = Buffer.from(SVG)
 
@@ -79,6 +93,29 @@ async function generate() {
   await sharp(Buffer.from(notifSvg)).resize(NOTIFICATION_SIZE, NOTIFICATION_SIZE).png()
     .toFile(join(ROOT, 'android/app/src/main/res/drawable/ic_notification.png'))
   console.log(`✓ Notification icon: 24×24`)
+
+  // iOS AppIcon.appiconset — App Store rejects icons with an alpha channel,
+  // so flatten to the opaque background instead of a transparent PNG.
+  const iosDir = join(ROOT, 'ios/Blink/Images.xcassets/AppIcon.appiconset')
+  mkdirSync(iosDir, { recursive: true })
+  for (const { filename, size } of IOS_ICONS) {
+    await sharp(svgBuf).resize(size, size).flatten({ background: '#0d0d1a' }).png()
+      .toFile(join(iosDir, filename))
+    console.log(`✓ iOS ${filename}: ${size}×${size}`)
+  }
+
+  // Point Contents.json at the files we just generated. Derive the filename
+  // straight from each slot's own size/scale (not a pixel-size lookup —
+  // 40x40@3x and 60x60@2x are both 120px, so a size-keyed map collides).
+  const contentsPath = join(iosDir, 'Contents.json')
+  const contents = JSON.parse(readFileSync(contentsPath, 'utf8'))
+  for (const img of contents.images) {
+    img.filename = img.idiom === 'ios-marketing'
+      ? 'icon-1024.png'
+      : `icon-${img.size.split('x')[0]}@${img.scale}.png`
+  }
+  writeFileSync(contentsPath, JSON.stringify(contents, null, 2) + '\n')
+  console.log('✓ Contents.json updated')
 
   console.log('\n🎉 All icons generated!')
 }
