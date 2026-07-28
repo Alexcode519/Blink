@@ -11,6 +11,7 @@ import { isBiometricAvailable } from '../utils/biometrics'
 import { panicWipe } from '../utils/panicWipe'
 import { LANGUAGES, t } from '../i18n/translations'
 import { FONT_SIZES, useFontSize } from '../context/FontSizeContext'
+import { version as APP_VERSION } from '../../package.json'
 
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 
@@ -645,6 +646,8 @@ export default function ProfileScreen({ navigation, onLogout, onLock }) {
         </TouchableOpacity>
       )}
 
+      <Text style={styles.versionText}>Blink v{APP_VERSION}</Text>
+
     </ScrollView>
   )
 }
@@ -687,6 +690,7 @@ const styles = StyleSheet.create({
   lockBtn:          { borderWidth: 1, borderColor: '#4f6ef7', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 10 },
   lockText:         { color: '#4f6ef7', fontWeight: '600', fontSize: 15 },
   signOutHint:      { color: '#444', fontSize: 12, textAlign: 'center', marginTop: 10 },
+  versionText:      { color: '#444', fontSize: 12, textAlign: 'center', marginTop: 24 },
   logoutBtn:        { borderWidth: 1, borderColor: '#ff4444', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 10 },
   logoutText:       { color: '#ff4444', fontWeight: '600', fontSize: 15 },
   deleteBtn:        { backgroundColor: '#ff4444', borderRadius: 10, padding: 14, alignItems: 'center' },
