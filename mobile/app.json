@@ -1,4 +1,9 @@
 {
   "name": "Blink",
-  "displayName": "Blink"
+  "displayName": "Blink",
+  "extra": {
+    "eas": {
+      "projectId": "5d9ce8e2-9283-4536-9b19-d11cd069ce53"
+    }
+  }
 }
