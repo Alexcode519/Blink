@@ -10,7 +10,10 @@
     ],
     "ios": {
       "bundleIdentifier": "com.yipmedia.blink",
-      "deploymentTarget": "16.0"
+      "deploymentTarget": "16.0",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "extra": {
       "eas": {
