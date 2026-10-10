@@ -8,11 +8,11 @@
     "ios": {
       "bundleIdentifier": "com.yipmedia.blink",
       "deploymentTarget": "16.0"
-    }
-  },
-  "extra": {
-    "eas": {
-      "projectId": "5d9ce8e2-9283-4536-9b19-d11cd069ce53"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "5d9ce8e2-9283-4536-9b19-d11cd069ce53"
+      }
     }
   }
 }
