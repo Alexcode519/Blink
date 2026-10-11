@@ -14,7 +14,7 @@ import RNFS from 'react-native-fs'
 import Video from 'react-native-video'
 import { saveToLibrary, loadIndex } from '../library/storage'
 import { api } from '../api/client'
-import { encryptForRecipient, decryptFromSender } from '../crypto/keys'
+import { encryptForRecipient, decryptFromSender, syncPublicKey } from '../crypto/keys'
 import SaveRequestModal from '../components/SaveRequestModal'
 import PhotoSendPreview from '../components/PhotoSendPreview'
 import Icon from 'react-native-vector-icons/Feather'
@@ -497,7 +497,8 @@ export default function ChatScreen({ route, navigation }) {
         const { ciphertext: rc, nonce: rn } = await encryptForRecipient(replyTo.snippet, recipientPublicKeyRef.current)
         replyFields = { replyToId: replyTo.id, replyPreviewCiphertext: rc, replyPreviewNonce: rn, replySender: replyTo.sender }
       }
-      const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType, ...replyFields })
+      const senderPublicKey = await syncPublicKey()
+      const { messageId } = await api.post('/messages', { recipientUsername, ciphertext, nonce, contentType, senderPublicKey, ...replyFields })
       const id = messageId ?? tempId
 
       // Keep the temp file as-is — store its URI in the cache so history loads find it.
