@@ -163,6 +163,9 @@ async function runMigrations() {
   PRIMARY KEY (message_id, user_id)
 )`)
 
+    await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_public_key TEXT`)
+  console.log('sender_public_key column ready')
+
   // Group save requests (depends on group_messages)
   await pool.query(`CREATE TABLE IF NOT EXISTS group_save_requests (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

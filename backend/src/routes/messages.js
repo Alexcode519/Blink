@@ -23,13 +23,14 @@ export async function messageRoutes(app) {
           replyPreviewCiphertext: { type: 'string', nullable: true },
           replyPreviewNonce:      { type: 'string', nullable: true },
           replySender:            { type: 'string', nullable: true },
+          senderPublicKey:        { type: 'string', nullable: true },
         },
       },
     },
   }, async (req, reply) => {
     const {
       recipientUsername, ciphertext, nonce, contentType, viewOnce,
-      replyToId, replyPreviewCiphertext, replyPreviewNonce, replySender,
+      replyToId, replyPreviewCiphertext, replyPreviewNonce, replySender, senderPublicKey,
     } = req.body
     const { rows: recipients } = await pool.query(
       'SELECT id, fcm_token FROM users WHERE username = $1',
@@ -51,9 +52,9 @@ export async function messageRoutes(app) {
     )
 
     const { rows } = await pool.query(
-      `INSERT INTO messages (sender_id, recipient_id, ciphertext, nonce, content_type, view_once, reply_to_id, reply_preview_ciphertext, reply_preview_nonce, reply_sender)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, created_at`,
-      [req.user.userId, recipient.id, ciphertext, nonce, contentType, viewOnce ?? false, replyToId ?? null, replyPreviewCiphertext ?? null, replyPreviewNonce ?? null, replySender ?? null]
+      `INSERT INTO messages (sender_id, recipient_id, ciphertext, nonce, content_type, view_once, reply_to_id, reply_preview_ciphertext, reply_preview_nonce, reply_sender, sender_public_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, created_at`,
+      [req.user.userId, recipient.id, ciphertext, nonce, contentType, viewOnce ?? false, replyToId ?? null, replyPreviewCiphertext ?? null, replyPreviewNonce ?? null, replySender ?? null, senderPublicKey ?? null]
     )
 
     // Sending a message implicitly accepts that contact from the sender's
@@ -275,7 +276,7 @@ export async function messageRoutes(app) {
               CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.ciphertext END AS ciphertext,
               CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.nonce END AS nonce,
               m.content_type, m.created_at, m.view_once, m.viewed_at, m.burn_at,
-              m.reply_to_id, m.reply_preview_ciphertext, m.reply_preview_nonce, m.reply_sender,
+              m.reply_to_id, m.reply_preview_ciphertext, m.reply_preview_nonce, m.reply_sender, m.sender_public_key,
               (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', mr.ciphertext, 'nonce', mr.nonce)), '[]')
                  FROM message_reactions mr JOIN users ru ON ru.id = mr.user_id WHERE mr.message_id = m.id) AS reactions
        FROM messages m
@@ -302,7 +303,7 @@ export async function messageRoutes(app) {
               CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.ciphertext END AS ciphertext,
               CASE WHEN m.view_once AND m.viewed_at IS NOT NULL THEN NULL ELSE m.nonce END AS nonce,
               m.content_type, m.created_at, m.view_once, m.viewed_at, m.burn_at,
-              m.reply_to_id, m.reply_preview_ciphertext, m.reply_preview_nonce, m.reply_sender,
+              m.reply_to_id, m.reply_preview_ciphertext, m.reply_preview_nonce, m.reply_sender, m.sender_public_key,
               (SELECT COALESCE(json_agg(json_build_object('username', ru.username, 'ciphertext', mr.ciphertext, 'nonce', mr.nonce)), '[]')
                  FROM message_reactions mr JOIN users ru ON ru.id = mr.user_id WHERE mr.message_id = m.id) AS reactions
        FROM messages m
