@@ -380,7 +380,7 @@ export default function ChatScreen({ route, navigation }) {
           return { id: m.id, from: sender, payload, contentType, label, mine: true, status, createdAt: m.created_at, ...extras }
         }
         try {
-          let keyToUse = recipientPublicKeyRef.current
+          let keyToUse = m.sender_public_key || recipientPublicKeyRef.current
           let payload
           try {
             payload = await decryptFromSender(m.ciphertext, m.nonce, keyToUse)
@@ -431,7 +431,7 @@ export default function ChatScreen({ route, navigation }) {
         incoming.map(async (m) => {
           const sender = m.senderusername ?? m.senderUsername ?? ''
           try {
-            let keyToUse = recipientPublicKeyRef.current
+            let keyToUse = m.sender_public_key || recipientPublicKeyRef.current
             let payload
             try {
               payload = await decryptFromSender(m.ciphertext, m.nonce, keyToUse)
