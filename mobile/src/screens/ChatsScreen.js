@@ -2,12 +2,13 @@ import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Alert, Pressable, BackHandler } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useFocusEffect } from '@react-navigation/native'
-import messaging from '@react-native-firebase/messaging'
 import Svg, { Path, Line, Circle, Polyline, Rect, G } from 'react-native-svg'
 import RNFS from 'react-native-fs'
 import { api } from '../api/client'
 import { deleteConversationItems, deleteGroupItems } from '../library/storage'
 import ExtendRequestModal from '../components/ExtendRequestModal'
+let messaging = () => ({ onMessage: () => () => {} })
+try { messaging = require('@react-native-firebase/messaging').default } catch (e) {}
 
 const AVATAR_PATH = `${RNFS.DocumentDirectoryPath}/blink_avatar.jpg`
 
@@ -69,26 +70,24 @@ export default function ChatsScreen({ navigation }) {
   const [avatarUri, setAvatarUri] = useState(null)
   const [openMenu, setOpenMenu] = useState(null)
   const [openGroupMenu, setOpenGroupMenu] = useState(null)
-  const [extendRequest, setExtendRequest] = useState(null) // pending extend request for sender to decide
+  const [extendRequest, setExtendRequest] = useState(null)
   const [pendingInvites, setPendingInvites] = useState([])
   const isFocused = useRef(false)
-  const [localUnread, setLocalUnread] = useState({}) // username -> count, incremented on FCM arrival
-  const deletedConvs = useRef(new Set()) // usernames deleted this session — cleared when they reappear with new messages
+  const [localUnread, setLocalUnread] = useState({})
+  const deletedConvs = useRef(new Set())
 
-  const CACHE_KEY_CONVS   = 'blink_cache_conversations'
-  const CACHE_KEY_GROUPS  = 'blink_cache_groups'
+  const CACHE_KEY_CONVS  = 'blink_cache_conversations'
+  const CACHE_KEY_GROUPS = 'blink_cache_groups'
 
   function loadConversations() {
     api.get('/messages/conversations')
       .then(({ conversations: c }) => {
         const filtered = c.filter(conv => {
           if (!deletedConvs.current.has(conv.other_username)) return true
-          // Deleted user reappeared — they sent new messages; unblock and show them
           deletedConvs.current.delete(conv.other_username)
           return true
         })
         setConversations(filtered)
-        // Server count is now authoritative — clear local increments for these users
         setLocalUnread(prev => {
           const next = { ...prev }
           for (const conv of filtered) delete next[conv.other_username]
@@ -113,10 +112,8 @@ export default function ChatsScreen({ navigation }) {
 
   useFocusEffect(useCallback(() => {
     isFocused.current = true
-    // Swallow back press on the home screen — use the home button to leave the app
     const backSub = BackHandler.addEventListener('hardwareBackPress', () => true)
 
-    // Show cached data immediately so the screen is never blank
     Promise.all([
       AsyncStorage.getItem(CACHE_KEY_CONVS),
       AsyncStorage.getItem(CACHE_KEY_GROUPS),
@@ -124,7 +121,6 @@ export default function ChatsScreen({ navigation }) {
       if (cachedC) { setConversations(JSON.parse(cachedC)); setLoading(false) }
       if (cachedG)   setGroups(JSON.parse(cachedG))
     }).catch(() => {}).finally(() => {
-      // Always refresh from network (silently if cache was shown)
       loadConversations()
       loadGroups()
       loadPendingInvites()
@@ -146,16 +142,20 @@ export default function ChatsScreen({ navigation }) {
         .then(({ requests }) => { if (requests.length && !extendRequest) setExtendRequest(requests[0]) })
         .catch(() => {})
     }, 3000)
-    // Immediately update local badge count when a foreground message arrives
-    const unsubFCM = messaging().onMessage((msg) => {
-      const sender = msg?.data?.senderUsername
-      if (sender) {
-        // New message from this sender — let their conversation through even if recently deleted
-        deletedConvs.current.delete(sender)
-        setLocalUnread(prev => ({ ...prev, [sender]: (prev[sender] ?? 0) + 1 }))
-      }
-      if (isFocused.current) loadConversations()
-    })
+
+    // ✅ FIXED: wrapped in try/catch so it doesn't crash without Firebase configured
+    let unsubFCM = () => {}
+    try {
+      unsubFCM = messaging().onMessage((msg) => {
+        const sender = msg?.data?.senderUsername
+        if (sender) {
+          deletedConvs.current.delete(sender)
+          setLocalUnread(prev => ({ ...prev, [sender]: (prev[sender] ?? 0) + 1 }))
+        }
+        if (isFocused.current) loadConversations()
+      })
+    } catch (e) {}
+
     return () => { clearInterval(timer); unsubFCM() }
   }, [extendRequest])
 
@@ -218,7 +218,6 @@ export default function ChatsScreen({ navigation }) {
             Alert.alert('Error', err.message)
             return
           }
-          // Server delete succeeded — clean up local state regardless of any local errors
           deletedConvs.current.add(username)
           AsyncStorage.removeItem(`blink_chat_${username}`).catch(() => {})
           deleteConversationItems(username).catch(() => {})
@@ -363,21 +362,14 @@ export default function ChatsScreen({ navigation }) {
         </Pressable>
       )}
       <View style={styles.topRow}>
-        {/* Blink absolutely centred */}
         <Text style={[styles.title, styles.titleCentered]} pointerEvents="none">Blink</Text>
-
-        {/* Left: gallery */}
         <TouchableOpacity onPress={() => navigation.navigate('Library')} style={styles.iconBtn}>
           <FeatherIcon />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => navigation.navigate('Nearby')} style={styles.iconBtn}>
           <NearbyIcon />
         </TouchableOpacity>
-
-        {/* Spacer pushes profile to the right */}
         <View style={{ flex: 1 }} />
-
-        {/* Right: profile */}
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.iconBtn}>
           {avatarUri ? (
             <Image source={{ uri: avatarUri }} style={styles.profileThumb} />
@@ -387,7 +379,6 @@ export default function ChatsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Pending verified invites */}
       {pendingInvites.map(inv => (
         <TouchableOpacity
           key={inv.id}
@@ -414,7 +405,7 @@ export default function ChatsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-{loading ? (
+      {loading ? (
         <Text style={styles.hint}>Loading…</Text>
       ) : conversations.length === 0 && groups.length === 0 ? (
         <Text style={styles.hint}>No conversations yet — start one above</Text>

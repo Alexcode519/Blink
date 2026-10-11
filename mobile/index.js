@@ -5,13 +5,21 @@
 import 'react-native-get-random-values';
 import { AppRegistry } from 'react-native';
 import App from './App';
-import { name as appName } from './app.json';
-import messaging from '@react-native-firebase/messaging';
-import { displayBackgroundNotification } from './src/notifications/setup';
+const appName = "main";
 
-// Background/quit state data-only message handler — plays sound, checks recipient
-messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-  await displayBackgroundNotification(remoteMessage);
-});
+console.log('INDEX: Starting registration...');
 
+try {
+  const messaging = require('@react-native-firebase/messaging').default;
+  const { displayBackgroundNotification } = require('./src/notifications/setup');
+  messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+    await displayBackgroundNotification(remoteMessage);
+  });
+  console.log('INDEX: Firebase handler registered');
+} catch (e) {
+  console.warn('Firebase background handler skipped:', e.message);
+}
+
+console.log('INDEX: Registering component...');
 AppRegistry.registerComponent(appName, () => App);
+console.log('INDEX: Done');

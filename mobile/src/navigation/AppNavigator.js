@@ -4,7 +4,6 @@ import { NavigationContainer, useNavigationContainerRef } from '@react-navigatio
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import messaging from '@react-native-firebase/messaging'
 import notifee from '@notifee/react-native'
 import { setupPushNotifications } from '../notifications/setup'
 import { syncPublicKey } from '../crypto/keys'
@@ -31,6 +30,8 @@ import InviteReviewScreen from '../screens/InviteReviewScreen'
 import QRInviteScreen from '../screens/QRInviteScreen'
 import QRClaimScreen from '../screens/QRClaimScreen'
 import NearbyScreen from '../screens/NearbyScreen'
+let messaging = () => ({ getInitialNotification: () => Promise.resolve(null), onNotificationOpenedApp: () => () => {}, onMessage: () => () => {} })
+try { messaging = require('@react-native-firebase/messaging').default } catch (e) {}
 
 const Stack = createNativeStackNavigator()
 
@@ -69,7 +70,7 @@ export default function AppNavigator() {
     async function check() {
       // Run all startup reads in parallel — notification checks and local storage together
       const [initial, notifeeInitial, , token, patternEnabled, pattern] = await Promise.all([
-        messaging().getInitialNotification().catch(() => null),
+        (() => { try { return messaging().getInitialNotification() } catch(e) { return Promise.resolve(null) } })(),
         notifee.getInitialNotification().catch(() => null),
         initToken(),  // warms _token cache
         AsyncStorage.getItem('token'),
@@ -113,33 +114,36 @@ export default function AppNavigator() {
 
   useEffect(() => {
     // Notification tapped while app is in background (locked or running)
-    const unsub = messaging().onNotificationOpenedApp((remoteMessage) => {
-      const d = remoteMessage?.data
-      let pending = null
-      if (d?.type === 'new_group_message' && d?.groupId) {
-        pending = { group: true, groupId: d.groupId }
-      } else if (d?.type === 'group_save_request' && d?.groupId) {
-        pending = { group: true, groupId: d.groupId }
-      } else if (d?.type === 'save_request' && d?.requesterUsername) {
-        pending = { group: false, senderUsername: d.requesterUsername }
-      } else if (d?.type === 'contact_invite') {
-        // Leave null — ChatsScreen shows the invite banner on focus
-      } else if (d?.type === 'qr_claimed' && d?.claimerUsername) {
-        pending = { group: false, senderUsername: d.claimerUsername }
-      } else if (d?.senderUsername) {
-        pending = { group: false, senderUsername: d.senderUsername }
-      }
-      if (!pending) return
-      // If nav is already mounted (app was in background), navigate immediately
-      const nav = navRef.current
-      if (nav?.isReady()) {
-        if (pending.group) nav.navigate('GroupChat', { groupId: pending.groupId })
-        else nav.navigate('Chat', { recipientUsername: pending.senderUsername })
-      } else {
-        // Nav not ready yet (cold start) — onNavReady will handle it
-        pendingChatRef.current = pending
-      }
-    })
+    let unsub = () => {}
+    try {
+      unsub = messaging().onNotificationOpenedApp((remoteMessage) => {
+        const d = remoteMessage?.data
+        let pending = null
+        if (d?.type === 'new_group_message' && d?.groupId) {
+          pending = { group: true, groupId: d.groupId }
+        } else if (d?.type === 'group_save_request' && d?.groupId) {
+          pending = { group: true, groupId: d.groupId }
+        } else if (d?.type === 'save_request' && d?.requesterUsername) {
+          pending = { group: false, senderUsername: d.requesterUsername }
+        } else if (d?.type === 'contact_invite') {
+          // Leave null — ChatsScreen shows the invite banner on focus
+        } else if (d?.type === 'qr_claimed' && d?.claimerUsername) {
+          pending = { group: false, senderUsername: d.claimerUsername }
+        } else if (d?.senderUsername) {
+          pending = { group: false, senderUsername: d.senderUsername }
+        }
+        if (!pending) return
+        // If nav is already mounted (app was in background), navigate immediately
+        const nav = navRef.current
+        if (nav?.isReady()) {
+          if (pending.group) nav.navigate('GroupChat', { groupId: pending.groupId })
+          else nav.navigate('Chat', { recipientUsername: pending.senderUsername })
+        } else {
+          // Nav not ready yet (cold start) — onNavReady will handle it
+          pendingChatRef.current = pending
+        }
+      })
+    } catch(e) {}
     return () => unsub()
   }, [])
 

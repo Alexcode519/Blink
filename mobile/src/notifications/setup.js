@@ -1,8 +1,9 @@
-import messaging from '@react-native-firebase/messaging'
 import notifee, { AndroidImportance } from '@notifee/react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { api } from '../api/client'
 import { getActiveChat } from './activeChat'
+let messaging = () => ({ requestPermission: () => Promise.resolve(0), getToken: () => Promise.resolve(null), onTokenRefresh: () => () => {}, onMessage: () => () => {} })
+try { messaging = require('@react-native-firebase/messaging').default } catch (e) {}
 
 // Audible channel — used when the app is in background/killed
 // v2 suffix forces Android to recreate it with HIGH importance (channel importance is immutable once set)
